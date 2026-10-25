@@ -53,7 +53,7 @@ class EditorController {
 
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor { Thread(it, "editor-analysis").apply { isDaemon = true } }
-    private val diagnostics = mutableListOf<DiagnosticRegion>()
+    private val syntaxRegions = mutableListOf<DiagnosticRegion>()
     private var checkGeneration = 0
     private var signatureGeneration = 0
     private val checkTask = Runnable { runSyntaxCheck() }
@@ -96,7 +96,7 @@ class EditorController {
             )
             registerDiagnosticProvider(object : DiagnosticProvider {
                 override fun provideDiagnostics(container: DiagnosticsContainer) {
-                    container.addDiagnostics(diagnostics.toList())
+                    container.addDiagnostics(syntaxRegions.toList())
                 }
             })
             colorScheme = TextMateColorScheme.create(ThemeRegistry.getInstance())
@@ -155,11 +155,11 @@ class EditorController {
     private fun applySyntaxIssues(issues: List<SyntaxIssue>) {
         val v = view ?: return
         val content = v.text
-        diagnostics.clear()
+        syntaxRegions.clear()
         issues.forEachIndexed { i, issue ->
             val start = charIndex(content, issue.line - 1, issue.col - 1)
             val end = charIndex(content, issue.endLine - 1, issue.endCol - 1).coerceAtLeast(start + 1)
-            diagnostics += DiagnosticRegion(start, end, DiagnosticRegion.SEVERITY_ERROR, i.toLong(), DiagnosticDetail(issue.message))
+            syntaxRegions += DiagnosticRegion(start, end, DiagnosticRegion.SEVERITY_ERROR, i.toLong(), DiagnosticDetail(issue.message))
         }
         syntaxIssues = issues
         v.invalidateDiagnostics()
