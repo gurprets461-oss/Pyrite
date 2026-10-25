@@ -100,6 +100,7 @@ androidComponents.onVariants { variant ->
             pythonVersion.set(pyVersion)
             stdlibDirs.from(pythonPrefixes.values.map { File(it, "lib/python$pyMinor") })
             appPythonDir.set(file("src/main/python"))
+            wheels.from(fileTree(File(crossBuildDir, "wheels")) { include("*.whl") })
         },
         PackPythonStdlib::outputDir,
     )
@@ -132,6 +133,9 @@ abstract class PackPythonStdlib : DefaultTask() {
     abstract val stdlibDirs: ConfigurableFileCollection
     @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val appPythonDir: DirectoryProperty
+    /** Pure-Python wheels unpacked into site-packages (e.g. jedi for completions). */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.NAME_ONLY)
+    abstract val wheels: ConfigurableFileCollection
     @get:OutputDirectory abstract val outputDir: DirectoryProperty
 
     private fun excluded(rel: String): Boolean {
@@ -147,18 +151,29 @@ abstract class PackPythonStdlib : DefaultTask() {
     @TaskAction
     fun pack() {
         val minor = pythonVersion.get().split(".").take(2).joinToString(".")
-        val entries = sortedMapOf<String, File>()
+        val sitePackages = "lib/python$minor/site-packages"
+        // Zip entry name -> where its bytes come from.
+        val entries = sortedMapOf<String, () -> java.io.InputStream>()
         for (dir in stdlibDirs.files) {
             dir.walkTopDown().filter { it.isFile }.forEach { f ->
                 val rel = f.relativeTo(dir).invariantSeparatorsPath
                 // Both ABIs' trees are merged: .py files are identical, and extension
                 // modules have the triplet in their names, so they don't collide.
-                if (!excluded(rel)) entries.putIfAbsent("lib/python$minor/$rel", f)
+                if (!excluded(rel)) entries.putIfAbsent("lib/python$minor/$rel") { f.inputStream() }
+            }
+        }
+        for (wheel in wheels.files.sortedBy { it.name }) {
+            java.util.zip.ZipFile(wheel).use { zip ->
+                for (e in zip.entries()) {
+                    if (e.isDirectory || "__pycache__" in e.name || e.name.contains("/django-stubs/")) continue
+                    val bytes = zip.getInputStream(e).use { it.readBytes() }
+                    entries["$sitePackages/${e.name}"] = { bytes.inputStream() }
+                }
             }
         }
         val appDir = appPythonDir.get().asFile
         appDir.walkTopDown().filter { it.isFile && "__pycache__" !in it.path }.forEach { f ->
-            entries["lib/python$minor/site-packages/${f.relativeTo(appDir).invariantSeparatorsPath}"] = f
+            entries["$sitePackages/${f.relativeTo(appDir).invariantSeparatorsPath}"] = { f.inputStream() }
         }
 
         val out = File(outputDir.get().asFile, "python")
@@ -166,9 +181,9 @@ abstract class PackPythonStdlib : DefaultTask() {
         out.mkdirs()
         val digest = MessageDigest.getInstance("SHA-256")
         ZipOutputStream(DigestOutputStream(File(out, "stdlib.zip").outputStream().buffered(), digest)).use { zip ->
-            for ((name, file) in entries) {
+            for ((name, open) in entries) {
                 zip.putNextEntry(ZipEntry(name).apply { time = 315532800000L }) // fixed time: reproducible
-                file.inputStream().use { it.copyTo(zip) }
+                open().use { it.copyTo(zip) }
                 zip.closeEntry()
             }
         }

@@ -8,3 +8,6 @@ class ReplService : PythonService()
 
 /** pip, in its own `:pip` process, so installing never stops a running script or the REPL. */
 class PipService : PythonService()
+
+/** The editor's long-lived analysis server, in `:analysis`. */
+class AnalysisService : PythonService()

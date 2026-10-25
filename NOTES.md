@@ -7,8 +7,28 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - M1 done: `InterpreterTest` (in-process) passes on the API 35 emulator, incl. the `45` check.
 - M2 done: `RunnerTest` (18 tests incl. stop < 3 s, Ctrl+C, os.abort()) green.
 - M3 done: `ConsoleUiTest` (REPL multi-line function + history, ANSI red) green.
-- Current: **M4 — Editor** (sora-editor + TextMate, keys row, autosave, find/replace,
-  font size; `EditorTest` uses the test orchestrator to check persistence across process death).
+- M4 done: `EditorTest` types `for i in range(3):` + Enter (auto-indent) + `print(i * 2)` via
+  key events and the keys row, runs it, sees 0/2/4; a second test in a fresh process
+  (test orchestrator) finds the file restored.
+- Current: M5 (Files) + M6 (pip) in CI; M7 (jedi completions, syntax underline) in progress.
+
+## pip / Android wheels (M6)
+- pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into
+  `filesDir/site-packages` on first use, run in-process in the `:pip` process with
+  `--target <site-packages> --upgrade` added to `install` (see `_pyrite/pip.py`).
+  Never run pip inside the REPL's interpreter: pip >= 26.3 rejects imports made after it
+  starts. REPL `pip ...` lines are intercepted by `ReplController` and sent to `:pip`.
+- sdists can't build (no subprocess/compiler on Android): only wheels install.
+- Tested on the API 35 x86_64 emulator (2026-10-25), all via PyPI:
+  | Package | Result |
+  |---|---|
+  | requests, rich (+ deps) | pure wheels, install + work (`requests.get` 200) |
+  | markupsafe 3.0.4 | cp315 android_24_x86_64 wheel, `_speedups` C ext imports |
+  | multidict 7.2.1 | cp315 android_24_x86_64 wheel, C ext imports (no arm64 wheel on PyPI) |
+  | aiohttp 3.14.5 | cp315 android wheel + deps (`--only-binary :all:`), `_http_parser` imports |
+  | charset-normalizer 3.5.2 | no cp315 android wheel; pure-Python wheel used |
+- No Android wheels on PyPI yet (checked 2026-10-25): numpy, pillow, cryptography,
+  pydantic-core, regex, lxml, pyyaml, msgpack, cffi, orjson, psutil, pandas, scipy.
 
 ## Architecture (so far)
 - `app/src/main/cpp/pyrite.c`: JNI bridge. `redirectStdio` (dup2 onto 0/1/2), `initialize`

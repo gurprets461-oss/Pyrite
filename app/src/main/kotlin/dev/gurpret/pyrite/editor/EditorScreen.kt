@@ -37,7 +37,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,6 +89,20 @@ fun EditorScreen(
             }
         }
         if (findOpen) FindBar(controller)
+        controller.syntaxIssues.firstOrNull()?.let { issue ->
+            Text(
+                "Line ${issue.line}: ${issue.message}",
+                color = MaterialTheme.colorScheme.onErrorContainer,
+                style = MaterialTheme.typography.labelMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .pointerInput(issue) { detectTapGestures(onTap = { controller.goToFirstIssue() }) }
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+                    .testTag("syntax-error"),
+            )
+        }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             AndroidView(
                 factory = { context -> controller.obtainView(context) },
@@ -97,8 +115,36 @@ fun EditorScreen(
                 modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp).testTag("run"),
             )
         }
+        controller.signature?.let { SignatureBar(it) }
         KeysRow(controller)
     }
+}
+
+/** "name(a, b, c)" with the parameter under the cursor in bold. */
+@Composable
+private fun SignatureBar(signature: Signature) {
+    val primary = MaterialTheme.colorScheme.primary
+    val text = buildAnnotatedString {
+        append(signature.name)
+        append("(")
+        signature.params.forEachIndexed { i, p ->
+            if (i > 0) append(", ")
+            if (i == signature.index) withStyle(SpanStyle(fontWeight = FontWeight.Bold, color = primary)) { append(p) }
+            else append(p)
+        }
+        append(")")
+    }
+    Text(
+        text,
+        fontFamily = FontFamily.Monospace,
+        style = MaterialTheme.typography.bodySmall,
+        maxLines = 2,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth()
+            .background(MaterialTheme.colorScheme.secondaryContainer)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .testTag("signature"),
+    )
 }
 
 @Composable

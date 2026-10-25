@@ -23,6 +23,7 @@ object Interpreter {
         Os.setenv("TMPDIR", context.cacheDir.path, true)
         Os.setenv("HOME", context.filesDir.path, true)
         Os.setenv("LANG", "C.UTF-8", true)
+        Os.setenv("XDG_CACHE_HOME", context.cacheDir.path, true)  // jedi's cache, among others
         // OpenSSL can't read Android's CA store layout, so give it a PEM bundle.
         CaBundle.ensure(context)?.let { Os.setenv("SSL_CERT_FILE", it.path, true) }
         // pip: no version nag, a persistent wheel cache, no interactive prompts.

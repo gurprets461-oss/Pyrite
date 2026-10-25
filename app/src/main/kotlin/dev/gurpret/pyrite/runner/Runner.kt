@@ -16,6 +16,7 @@ object Runner {
     fun serviceFor(request: RunRequest): Class<out PythonService> = when (request) {
         RunRequest.Repl -> ReplService::class.java
         is RunRequest.Pip -> PipService::class.java
+        RunRequest.Analysis -> AnalysisService::class.java
         else -> PythonService::class.java
     }
 

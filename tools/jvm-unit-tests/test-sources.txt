@@ -8,3 +8,5 @@ dev/gurpret/pyrite/console/CommandHistoryTest.kt
 dev/gurpret/pyrite/files/ProjectStoreTest.kt
 dev/gurpret/pyrite/files/FileOpsTest.kt
 dev/gurpret/pyrite/packages/SitePackagesTest.kt
+dev/gurpret/pyrite/editor/CompletionTriggerTest.kt
+dev/gurpret/pyrite/settings/RecentFilesTest.kt

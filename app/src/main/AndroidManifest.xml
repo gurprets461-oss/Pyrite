@@ -35,6 +35,10 @@
             android:name=".runner.PipService"
             android:exported="false"
             android:process=":pip" />
+        <service
+            android:name=".runner.AnalysisService"
+            android:exported="false"
+            android:process=":analysis" />
     </application>
 
 </manifest>

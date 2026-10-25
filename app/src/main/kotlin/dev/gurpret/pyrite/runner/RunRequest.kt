@@ -13,6 +13,9 @@ sealed interface RunRequest {
     /** An interactive console (code.InteractiveConsole). */
     data object Repl : RunRequest
 
+    /** The editor's analysis server (jedi completions, syntax checks); see _pyrite/analysis.py. */
+    data object Analysis : RunRequest
+
     /** `pip <args>`, run in its own process (pip can't share an interpreter with user code). */
     data class Pip(val args: List<String>) : RunRequest
 
@@ -28,6 +31,7 @@ sealed interface RunRequest {
                 putStringArray(ARGS, r.args.toTypedArray())
             }
             Repl -> putString(KIND, "repl")
+            Analysis -> putString(KIND, "analysis")
             is Pip -> {
                 putString(KIND, "pip")
                 putStringArray(ARGS, r.args.toTypedArray())
@@ -45,6 +49,7 @@ sealed interface RunRequest {
             "code" -> Code(b.getString(CODE)!!)
             "script" -> Script(b.getString(PATH)!!, b.getStringArray(ARGS)?.toList().orEmpty())
             "repl" -> Repl
+            "analysis" -> Analysis
             "pip" -> Pip(b.getStringArray(ARGS)?.toList().orEmpty())
             else -> throw IllegalArgumentException("unknown run kind $kind")
         }

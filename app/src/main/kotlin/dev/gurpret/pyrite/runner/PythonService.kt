@@ -68,6 +68,7 @@ open class PythonService : Service() {
                 is RunRequest.Script -> Interpreter.runFile(request.path, request.args)
                 RunRequest.Repl -> Interpreter.runRepl()
                 is RunRequest.Pip -> Interpreter.runPip(request.args)
+                RunRequest.Analysis -> Interpreter.runString("import _pyrite.analysis as _a\n_a.serve()", "<analysis>")
             }
             // Like interpreter exit: join non-daemon threads, run atexit handlers, flush.
             Interpreter.shutdown(status)

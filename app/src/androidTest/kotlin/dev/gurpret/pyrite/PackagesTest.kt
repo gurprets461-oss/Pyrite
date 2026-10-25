@@ -2,13 +2,13 @@ package dev.gurpret.pyrite
 
 import android.os.SystemClock
 import android.util.Log
-import androidx.compose.ui.test.ComposeTimeoutException
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToKey
 import androidx.compose.ui.test.performTextInput
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
@@ -76,11 +76,12 @@ class PackagesTest {
         compose.onNodeWithTag("pkg-install").performClick()
         waitForConsole(vm.packages.console, "Process exited with code", 600)
         waitForConsole(vm.packages.console, "Process exited with code 0", 1)
-        try {
-            compose.waitUntilAtLeastOneExists(hasTestTag("pkg-requests"), 10_000)
-            compose.waitUntilAtLeastOneExists(hasTestTag("pkg-rich"), 10_000)
-        } catch (e: ComposeTimeoutException) {
-            fail("installed list: ${vm.packages.installed}")
+        val names = vm.packages.installed.map { it.name.lowercase() }
+        assertTrue("installed: $names", "requests" in names && "rich" in names)
+        // The rows are in a lazy list; scroll each into view to check the UI shows them.
+        for (name in listOf("requests", "rich")) {
+            compose.onNodeWithTag("pkg-list").performScrollToKey(name)
+            compose.waitUntilAtLeastOneExists(hasTestTag("pkg-$name"), 10_000)
         }
         scenario.close()
 

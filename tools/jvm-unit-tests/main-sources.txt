@@ -8,3 +8,5 @@ dev/gurpret/pyrite/console/CommandHistory.kt
 dev/gurpret/pyrite/files/ProjectStore.kt
 dev/gurpret/pyrite/files/FileOps.kt
 dev/gurpret/pyrite/packages/SitePackages.kt
+dev/gurpret/pyrite/editor/CompletionTrigger.kt
+dev/gurpret/pyrite/settings/RecentFiles.kt

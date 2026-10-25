@@ -76,7 +76,7 @@ class FilesTest {
             vm.loadText(
                 "import os, sys, helpers\n" +
                     "print(helpers.greet('files'))\n" +
-                    "print(os.getcwd() == sys.path[0])\n" +
+                    "print(os.path.samefile(os.getcwd(), sys.path[0]))\n" +
                     "with open('out.txt', 'w') as f:\n" +
                     "    f.write('written')\n",
             )

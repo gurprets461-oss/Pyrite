@@ -29,10 +29,10 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** tests pass: REPL defines a multi-line function and calls it; `print("\033[31mred\033[0m")` renders red.
 
 ## M4 — Editor
-- [ ] sora-editor with Python highlighting, line numbers, undo/redo, auto-indent after `:`
-- [ ] Extra-keys row above the keyboard: Tab, `: ( ) [ ] { } " ' # = _`, arrow keys
-- [ ] Run button: autosave → run in `:py` → switch to console
-- [ ] Find/replace; font size setting
+- [x] sora-editor with Python highlighting, line numbers, undo/redo, auto-indent after `:`
+- [x] Extra-keys row above the keyboard: Tab, `: ( ) [ ] { } " ' # = _`, arrow keys
+- [x] Run button: autosave → run in `:py` → switch to console
+- [x] Find/replace; font size setting
 **Done when:** on emulator/device: type an indented script using the keys row, run it, see output; kill and reopen the app and the file is still there.
 
 ## M5 — Files & projects

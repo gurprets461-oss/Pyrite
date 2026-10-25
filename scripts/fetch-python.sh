@@ -80,3 +80,29 @@ done
 
 echo "$PY_VERSION" > "$DEST/python-version.txt"
 log "done: Python $PY_VERSION for ${!SHA256[*]}"
+
+# Pure-Python packages bundled into the app (jedi powers the editor's completions).
+# Pinned by URL and SHA-256 from PyPI.
+WHEELS=(
+    "https://files.pythonhosted.org/packages/be/c7/71eb0d51cdcbb63b857c931aa4e9218b078b5d9f8ecd383b234f28fe7b0f/jedi-0.20.1-py2.py3-none-any.whl 0fb16d86c4a4c73c37ba518c77419975e30fcc620658a8d14fbb5720cdd34142"
+    "https://files.pythonhosted.org/packages/99/5d/8268b644392ee874ee82a635cd0df1773de230bde356c38de28e298392cc/parso-0.8.7-py2.py3-none-any.whl a8926eb2a1b915486941fdbd31e86a4baf88fe8c210f25f2f35ecec5b574ca1c"
+)
+rm -rf "$DEST/wheels"
+mkdir -p "$DEST/wheels"
+for entry in "${WHEELS[@]}"; do
+    read -r url expected <<< "$entry"
+    name=${url##*/}
+    cached="$CACHE/$name"
+    if [ ! -f "$cached" ] || [ "$(sha256_of "$cached")" != "$expected" ]; then
+        log "downloading $name"
+        curl -fSL --retry 4 --retry-delay 2 -o "$cached.part" "$url"
+        if [ "$(sha256_of "$cached.part")" != "$expected" ]; then
+            log "CHECKSUM MISMATCH for $name"
+            rm -f "$cached.part"
+            exit 1
+        fi
+        mv "$cached.part" "$cached"
+    fi
+    cp "$cached" "$DEST/wheels/$name"
+done
+log "bundled wheels: $(cd "$DEST/wheels" && echo *.whl)"

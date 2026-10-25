@@ -2,18 +2,26 @@ package dev.gurpret.pyrite.editor
 
 import android.content.Context
 import android.graphics.Typeface
+import android.os.Handler
+import android.os.Looper
 import android.view.ViewGroup
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.github.rosemoe.sora.event.ContentChangeEvent
 import io.github.rosemoe.sora.event.PublishSearchResultEvent
+import io.github.rosemoe.sora.event.SelectionChangeEvent
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticDetail
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticProvider
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticsContainer
+import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
 import io.github.rosemoe.sora.langs.textmate.TextMateColorScheme
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
 import io.github.rosemoe.sora.langs.textmate.registry.ThemeRegistry
 import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.EditorSearcher
 import io.github.rosemoe.sora.widget.SelectionMovement
+import java.util.concurrent.Executors
 
 /**
  * Owns the sora-editor view and exposes what the Compose UI needs. Lives as long as
@@ -23,6 +31,28 @@ import io.github.rosemoe.sora.widget.SelectionMovement
 class EditorController {
     var view: CodeEditor? = null
         private set
+
+    /** Completions, signatures and syntax checks; null until the app wires it up. */
+    var analysis: AnalysisClient? = null
+
+    /** The open file's path (jedi uses it to resolve sibling imports). */
+    var path: String? = null
+
+    /** Syntax errors from the last check (shown under the editor, underlined in it). */
+    var syntaxIssues by mutableStateOf<List<SyntaxIssue>>(emptyList())
+        private set
+
+    /** The call signature around the cursor, if any. */
+    var signature by mutableStateOf<Signature?>(null)
+        private set
+
+    private val main = Handler(Looper.getMainLooper())
+    private val worker = Executors.newSingleThreadExecutor { Thread(it, "editor-analysis").apply { isDaemon = true } }
+    private val diagnostics = mutableListOf<DiagnosticRegion>()
+    private var checkGeneration = 0
+    private var signatureGeneration = 0
+    private val checkTask = Runnable { runSyntaxCheck() }
+    private val signatureTask = Runnable { runSignatureHelp() }
     private var pendingText: String? = null
     private var pendingFontSize: Int? = null
 
@@ -51,10 +81,16 @@ class EditorController {
         val editor = CodeEditor(context).apply {
             typefaceText = Typeface.MONOSPACE
             typefaceLineNumber = Typeface.MONOSPACE
-            // Identifier completion comes from jedi later; the built-in one would steal Enter.
-            setEditorLanguage(TextMateLanguage.create(TextMateSetup.PYTHON_SCOPE, false).apply {
+            val textMate = TextMateLanguage.create(TextMateSetup.PYTHON_SCOPE, false).apply {
                 tabSize = 4
                 useTab(false)
+            }
+            val client = analysis
+            setEditorLanguage(if (client != null) PythonLanguage(textMate, client) { path } else textMate)
+            registerDiagnosticProvider(object : DiagnosticProvider {
+                override fun provideDiagnostics(container: DiagnosticsContainer) {
+                    container.addDiagnostics(diagnostics.toList())
+                }
             })
             colorScheme = TextMateColorScheme.create(ThemeRegistry.getInstance())
             isLineNumberEnabled = true
@@ -65,7 +101,9 @@ class EditorController {
             subscribeAlways(ContentChangeEvent::class.java) { event ->
                 refreshUndoState()
                 if (event.action != ContentChangeEvent.ACTION_SET_NEW_TEXT) onEdited?.invoke()
+                scheduleSyntaxCheck()
             }
+            subscribeAlways(SelectionChangeEvent::class.java) { scheduleSignatureHelp() }
             subscribeAlways(PublishSearchResultEvent::class.java) { refreshMatchStatus() }
         }
         pendingText?.let { editor.setText(it) }
@@ -82,6 +120,97 @@ class EditorController {
         val v = view
         if (v == null) pendingText = text else v.setText(text)
         refreshUndoState()
+        scheduleSyntaxCheck(0)
+    }
+
+    // --- analysis -----------------------------------------------------------------
+
+    /** Checks syntax after a typing pause, so errors show without running. */
+    fun scheduleSyntaxCheck(delayMs: Long = SYNTAX_CHECK_DELAY_MS) {
+        main.removeCallbacks(checkTask)
+        main.postDelayed(checkTask, delayMs)
+    }
+
+    private fun runSyntaxCheck() {
+        val v = view ?: return
+        val client = analysis ?: return
+        val source = v.text.toString()
+        val file = path
+        val generation = ++checkGeneration
+        worker.execute {
+            val issues = client.check(source, file) ?: return@execute
+            main.post { if (generation == checkGeneration) applySyntaxIssues(issues) }
+        }
+    }
+
+    private fun applySyntaxIssues(issues: List<SyntaxIssue>) {
+        val v = view ?: return
+        val content = v.text
+        diagnostics.clear()
+        issues.forEachIndexed { i, issue ->
+            val start = charIndex(content, issue.line - 1, issue.col - 1)
+            val end = charIndex(content, issue.endLine - 1, issue.endCol - 1).coerceAtLeast(start + 1)
+            diagnostics += DiagnosticRegion(start, end, DiagnosticRegion.SEVERITY_ERROR, i.toLong(), DiagnosticDetail(issue.message))
+        }
+        syntaxIssues = issues
+        v.invalidateDiagnostics()
+    }
+
+    private fun charIndex(content: io.github.rosemoe.sora.text.Content, line: Int, col: Int): Int {
+        if (content.lineCount == 0) return 0
+        val l = line.coerceIn(0, content.lineCount - 1)
+        val c = col.coerceIn(0, content.getColumnCount(l))
+        return content.getCharIndex(l, c)
+    }
+
+    /** Diagnostics currently attached to the editor (for tests and the status line). */
+    fun diagnosticRegions(): List<DiagnosticRegion> {
+        val v = view ?: return emptyList()
+        val out = ArrayList<DiagnosticRegion>()
+        v.diagnostics?.queryInRegion(out, 0, v.text.length + 1)
+        return out
+    }
+
+    /** Moves the cursor to the first syntax error. */
+    fun goToFirstIssue() {
+        val issue = syntaxIssues.firstOrNull() ?: return
+        val v = view ?: return
+        val content = v.text
+        val line = (issue.line - 1).coerceIn(0, maxOf(0, content.lineCount - 1))
+        v.setSelection(line, (issue.col - 1).coerceIn(0, content.getColumnCount(line)))
+        v.ensureSelectionVisible()
+    }
+
+    private fun scheduleSignatureHelp() {
+        main.removeCallbacks(signatureTask)
+        main.postDelayed(signatureTask, SIGNATURE_DELAY_MS)
+    }
+
+    private fun runSignatureHelp() {
+        val v = view ?: return
+        val client = analysis ?: return
+        val cursor = v.cursor
+        if (cursor.isSelected) {
+            signature = null
+            return
+        }
+        val content = v.text
+        val index = cursor.left
+        // Cheap pre-check: is there an unclosed "(" shortly before the cursor?
+        val window = content.subSequence(maxOf(0, index - 400), index).toString()
+        if (!SignatureTrigger.insideCall(window)) {
+            signature = null
+            return
+        }
+        val source = content.toString()
+        val line = cursor.leftLine + 1
+        val col = cursor.leftColumn
+        val file = path
+        val generation = ++signatureGeneration
+        worker.execute {
+            val sig = client.signatures(source, line, col, file).firstOrNull()
+            main.post { if (generation == signatureGeneration) signature = sig }
+        }
     }
 
     fun setFontSize(sp: Int) {
@@ -171,6 +300,11 @@ class EditorController {
             index >= 0 -> "${index + 1}/$count"
             else -> "$count matches"
         }
+    }
+
+    companion object {
+        const val SYNTAX_CHECK_DELAY_MS = 600L
+        const val SIGNATURE_DELAY_MS = 300L
     }
 
     private fun refreshUndoState() {
