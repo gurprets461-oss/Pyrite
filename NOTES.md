@@ -211,11 +211,18 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 - jedi picks a "same environment" when sys.executable's basename starts with "python",
   then tries to spawn it. Always pass `environment=jedi.InterpreterEnvironment()`.
 - Input written to a `RunSession` before the service connects is queued, not dropped.
-- Typing sends one completion request per keystroke; the analysis server used to answer
-  every one in order, so the last (the only one sora still waits for) could sit behind
-  7 stale jedi calls and miss the editor's 3 s timeout: no popup (PolishTest failed in 2
-  of 5 CI runs). The server now reads all queued requests and answers only the newest
-  check/complete/signature (older ones get `{"superseded": true}`); timeout is 8 s.
+- Completion popup missing after typing `os.path.` (PolishTest failed in ~2 of 5 runs):
+  sora's CompletionThread posts `hide()` whenever a request ends with no items, without
+  checking it's still the current request, and `hide()` cancels whatever request *is*
+  current. So any earlier keystroke's request that came back empty (timed out, or
+  "superseded") could cancel the last keystroke's request: no list. Fix: the editor path
+  uses `AnalysisClient.tryComplete`, which returns null for "no answer", and
+  `PythonLanguage` throws sora's `CompletionCancelledException` for it (sora posts nothing
+  then); only a real empty jedi result hides the window. Also, the analysis server
+  answers only the newest queued check/complete/signature request (older ones get
+  `{"superseded": true}`), and the editor waits up to 8 s. Found by logging the
+  completion window's request/show/hide calls with callers (PolishTest, tag
+  PyriteCompletion).
 - pip silently ignores a plain-http index unless its host is passed with
   `--trusted-host` (the CI stand-in index needs it).
 - With no matching wheel, pip falls back to the sdist and tries to run `sys.executable`
@@ -223,9 +230,5 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   "Android can't build packages from source" error.
 
 ## Open problems
-- `PolishTest.typingOsPathDotShowsCompletions` still fails now and then even though
-  jedi answers the editor text in ~70 ms with the editor focused (run 40224237930): the
-  completion window never shows. The test now logs every request/show/hide of sora's
-  completion window with its caller (tag PyriteCompletion) to find what suppresses it.
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.

@@ -2,6 +2,7 @@ package dev.gurpret.pyrite.editor
 
 import android.os.Bundle
 import io.github.rosemoe.sora.lang.Language
+import io.github.rosemoe.sora.lang.completion.CompletionCancelledException
 import io.github.rosemoe.sora.lang.completion.CompletionPublisher
 import io.github.rosemoe.sora.lang.completion.SimpleCompletionItem
 import io.github.rosemoe.sora.langs.textmate.TextMateLanguage
@@ -30,7 +31,11 @@ class PythonLanguage(
         val before = lineText.substring(0, col)
         val prefix = CompletionTrigger.prefix(before) ?: return
         val source = content.reference.toString()
-        val items = analysis.complete(source, position.line + 1, col, path())
+        // No answer (a newer keystroke superseded this request, a timeout, a restart) must
+        // not look like "no completions": sora hides the window on an empty result, and its
+        // hide() cancels whatever request is current, i.e. the newer one, so no list would
+        // show for the last keystroke. Report it as cancelled instead.
+        val items = analysis.tryComplete(source, position.line + 1, col, path()) ?: throw CompletionCancelledException()
         publisher.checkCancelled()
         if (items.isEmpty()) return
         publisher.addItems(items.map { SimpleCompletionItem(it.name, it.type, prefix.length, it.name) })
