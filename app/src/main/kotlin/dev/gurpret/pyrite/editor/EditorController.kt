@@ -38,6 +38,11 @@ class EditorController {
     /** The open file's path (jedi uses it to resolve sibling imports). */
     var path: String? = null
 
+    /** Completion popups on/off (Settings). */
+    var completionEnabled = true
+
+    private var pendingCursor: Pair<Int, Int>? = null
+
     /** Syntax errors from the last check (shown under the editor, underlined in it). */
     var syntaxIssues by mutableStateOf<List<SyntaxIssue>>(emptyList())
         private set
@@ -86,7 +91,9 @@ class EditorController {
                 useTab(false)
             }
             val client = analysis
-            setEditorLanguage(if (client != null) PythonLanguage(textMate, client) { path } else textMate)
+            setEditorLanguage(
+                if (client != null) PythonLanguage(textMate, client, { path }, { completionEnabled }) else textMate,
+            )
             registerDiagnosticProvider(object : DiagnosticProvider {
                 override fun provideDiagnostics(container: DiagnosticsContainer) {
                     container.addDiagnostics(diagnostics.toList())
@@ -108,6 +115,8 @@ class EditorController {
         }
         pendingText?.let { editor.setText(it) }
         pendingText = null
+        pendingCursor?.let { (line, col) -> placeCursor(editor, line, col) }
+        pendingCursor = null
         pendingFontSize?.let { editor.setTextSize(it.toFloat()) }
         view = editor
         refreshUndoState()
@@ -211,6 +220,22 @@ class EditorController {
             val sig = client.signatures(source, line, col, file).firstOrNull()
             main.post { if (generation == signatureGeneration) signature = sig }
         }
+    }
+
+    /** Cursor as (line, column), 0-based. */
+    fun cursorPosition(): Pair<Int, Int>? = view?.cursor?.let { it.leftLine to it.leftColumn }
+
+    fun setCursor(line: Int, col: Int) {
+        val v = view
+        if (v == null) pendingCursor = line to col else placeCursor(v, line, col)
+    }
+
+    private fun placeCursor(v: CodeEditor, line: Int, col: Int) {
+        val content = v.text
+        if (content.lineCount == 0) return
+        val l = line.coerceIn(0, content.lineCount - 1)
+        v.setSelection(l, col.coerceIn(0, content.getColumnCount(l)))
+        v.post { v.ensureSelectionVisible() }
     }
 
     fun setFontSize(sp: Int) {

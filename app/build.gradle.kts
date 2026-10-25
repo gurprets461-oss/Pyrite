@@ -2,7 +2,9 @@ import com.android.build.api.variant.ApplicationVariant
 import com.android.build.api.variant.SourceDirectories
 import java.security.DigestOutputStream
 import java.security.MessageDigest
+import java.io.InputStream
 import java.util.zip.ZipEntry
+import java.util.zip.ZipFile
 import java.util.zip.ZipOutputStream
 
 plugins {
@@ -153,7 +155,7 @@ abstract class PackPythonStdlib : DefaultTask() {
         val minor = pythonVersion.get().split(".").take(2).joinToString(".")
         val sitePackages = "lib/python$minor/site-packages"
         // Zip entry name -> where its bytes come from.
-        val entries = sortedMapOf<String, () -> java.io.InputStream>()
+        val entries = sortedMapOf<String, () -> InputStream>()
         for (dir in stdlibDirs.files) {
             dir.walkTopDown().filter { it.isFile }.forEach { f ->
                 val rel = f.relativeTo(dir).invariantSeparatorsPath
@@ -163,7 +165,7 @@ abstract class PackPythonStdlib : DefaultTask() {
             }
         }
         for (wheel in wheels.files.sortedBy { it.name }) {
-            java.util.zip.ZipFile(wheel).use { zip ->
+            ZipFile(wheel).use { zip ->
                 for (e in zip.entries()) {
                     if (e.isDirectory || "__pycache__" in e.name || e.name.contains("/django-stubs/")) continue
                     val bytes = zip.getInputStream(e).use { it.readBytes() }

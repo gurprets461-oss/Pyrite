@@ -16,6 +16,7 @@ class PythonLanguage(
     private val base: TextMateLanguage,
     private val analysis: AnalysisClient,
     private val path: () -> String?,
+    private val enabled: () -> Boolean = { true },
 ) : Language by base {
     override fun requireAutoComplete(
         content: ContentReference,
@@ -23,6 +24,7 @@ class PythonLanguage(
         publisher: CompletionPublisher,
         extraArguments: Bundle,
     ) {
+        if (!enabled()) return
         val lineText = content.getLine(position.line)
         val col = position.column.coerceAtMost(lineText.length)
         val before = lineText.substring(0, col)

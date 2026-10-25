@@ -3,7 +3,6 @@ package dev.gurpret.pyrite.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +17,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,12 +61,19 @@ fun EditorScreen(
     title: String,
     dirty: Boolean,
     fontSize: Int,
+    dark: Boolean,
     onRun: () -> Unit,
     onFontSize: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    recentFiles: List<String> = emptyList(),
+    examples: List<String> = emptyList(),
+    onOpenRecent: (String) -> Unit = {},
+    onOpenExample: (String) -> Unit = {},
+    onSettings: () -> Unit = {},
+    displayName: (String) -> String = { it },
 ) {
     var findOpen by rememberSaveable { mutableStateOf(false) }
-    val dark = isSystemInDarkTheme()
+    var openMenu by remember { mutableStateOf(false) }
     LaunchedEffect(dark) { controller.setDarkTheme(dark) }
     LaunchedEffect(fontSize) { controller.setFontSize(fontSize) }
 
@@ -78,6 +87,30 @@ fun EditorScreen(
                 modifier = Modifier.weight(1f).testTag("editor-title"),
             )
             Row(Modifier.horizontalScroll(rememberScrollState())) {
+                Box {
+                    TextButton(onClick = { openMenu = true }, modifier = Modifier.testTag("open-menu")) { Text("Open") }
+                    DropdownMenu(expanded = openMenu, onDismissRequest = { openMenu = false }) {
+                        if (recentFiles.isNotEmpty()) {
+                            Text("Recent", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp))
+                            for (path in recentFiles) {
+                                DropdownMenuItem(
+                                    text = { Text(displayName(path), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                                    onClick = { openMenu = false; onOpenRecent(path) },
+                                    modifier = Modifier.testTag("recent-${displayName(path)}"),
+                                )
+                            }
+                            HorizontalDivider()
+                        }
+                        Text("Examples", style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp))
+                        for (name in examples) {
+                            DropdownMenuItem(
+                                text = { Text(name) },
+                                onClick = { openMenu = false; onOpenExample(name) },
+                                modifier = Modifier.testTag("example-$name"),
+                            )
+                        }
+                    }
+                }
                 TextButton(onClick = controller::undo, enabled = controller.canUndo) { Text("Undo") }
                 TextButton(onClick = controller::redo, enabled = controller.canRedo) { Text("Redo") }
                 TextButton(onClick = {
@@ -86,6 +119,7 @@ fun EditorScreen(
                 }, modifier = Modifier.testTag("find-toggle")) { Text("Find") }
                 TextButton(onClick = { onFontSize(-1) }, modifier = Modifier.testTag("font-smaller")) { Text("A−") }
                 TextButton(onClick = { onFontSize(+1) }, modifier = Modifier.testTag("font-larger")) { Text("A+") }
+                TextButton(onClick = onSettings, modifier = Modifier.testTag("settings")) { Text("⚙") }
             }
         }
         if (findOpen) FindBar(controller)

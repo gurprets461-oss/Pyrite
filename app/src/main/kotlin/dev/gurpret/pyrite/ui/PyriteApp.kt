@@ -30,6 +30,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.gurpret.pyrite.R
+import dev.gurpret.pyrite.editor.AnalysisClient
 import dev.gurpret.pyrite.editor.EditorController
 import dev.gurpret.pyrite.editor.EditorScreen
 import dev.gurpret.pyrite.files.FileBrowserState
@@ -41,6 +42,8 @@ import dev.gurpret.pyrite.packages.PackagesScreen
 import dev.gurpret.pyrite.python.PythonInstaller
 import dev.gurpret.pyrite.runner.RunRequest
 import dev.gurpret.pyrite.settings.Settings
+import dev.gurpret.pyrite.settings.SettingsDialog
+import dev.gurpret.pyrite.settings.ThemeMode
 import java.io.File
 
 enum class Tab(val label: String, @param:DrawableRes val icon: Int) {
@@ -59,14 +62,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val repl = ReplController(app)
     val files = FileBrowserState(FileOps(store.root))
     val packages = PackagesController(app, PythonInstaller(app).sitePackages)
-    var tab by mutableStateOf(Tab.EDITOR)
+    val analysis = AnalysisClient(app)
+    var settingsOpen by mutableStateOf(false)
+
+    // Restore the last tab, except the console: its output isn't kept across launches.
+    var tab by mutableStateOf(
+        settings.lastTab?.let { runCatching { Tab.valueOf(it) }.getOrNull() }?.takeIf { it != Tab.CONSOLE } ?: Tab.EDITOR,
+    )
         private set
 
     fun selectTab(t: Tab) {
         if (t == Tab.FILES) files.refresh()  // programs may have written files
         if (t == Tab.PACKAGES) packages.refresh()
         if (tab == Tab.EDITOR && t != Tab.EDITOR) saveNow()
+        showTab(t)
+    }
+
+    private fun showTab(t: Tab) {
         tab = t
+        settings.lastTab = t.name
     }
 
     var currentFile by mutableStateOf(initialFile())
@@ -79,7 +93,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         run.onFinished = { files.refresh() }
+        editor.analysis = analysis
+        editor.completionEnabled = settings.completionEnabled
+        editor.path = currentFile.path
         editor.setText(store.read(currentFile))
+        settings.lastCursor?.let { (line, col) -> editor.setCursor(line, col) }
+        settings.noteOpened(currentFile.path)
+        analysis.start()  // warm up jedi before the first keystroke
         editor.onEdited = {
             dirty = true
             main.removeCallbacks(autosave)
@@ -95,6 +115,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun saveNow() {
         main.removeCallbacks(autosave)
+        editor.cursorPosition()?.let { settings.lastCursor = it }
         if (!dirty) return
         try {
             store.write(currentFile, editor.text)
@@ -106,11 +127,38 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     fun openFile(file: File) {
         saveNow()
+        if (!file.isFile) {
+            settings.forgetRecent(file.path)
+            return
+        }
         currentFile = file
         settings.lastFile = file.path
+        settings.noteOpened(file.path)
+        editor.path = file.path
         editor.setText(store.read(file))
+        editor.setCursor(0, 0)
         dirty = false
-        tab = Tab.EDITOR
+        showTab(Tab.EDITOR)
+    }
+
+    /** Bundled examples (assets/examples). */
+    val examples: List<String> by lazy {
+        app.assets.list("examples").orEmpty().filter { it.endsWith(".py") }.sorted()
+    }
+
+    /** Copies an example into projects/examples/ (keeping any edited copy) and opens it. */
+    fun openExample(name: String) {
+        val target = File(store.root, "examples/$name")
+        if (!target.exists()) {
+            val text = getApplication<Application>().assets.open("examples/$name").bufferedReader().use { it.readText() }
+            store.write(target, text)
+        }
+        openFile(target)
+    }
+
+    fun setCompletion(enabled: Boolean) {
+        settings.changeCompletion(enabled)
+        editor.completionEnabled = enabled
     }
 
     /** Replaces the editor's text as an edit (saved like typing). For examples and tests. */
@@ -131,6 +179,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         }
         currentFile = moved
         settings.lastFile = moved.path
+        settings.forgetRecent(cur.path)
+        settings.noteOpened(moved.path)
+        editor.path = moved.path
     }
 
     /** If the open file (or a folder containing it) was deleted, fall back to main.py. */
@@ -139,8 +190,9 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val gone = file.canonicalFile
         if (cur == gone || cur.path.startsWith(gone.path + File.separator)) {
             dirty = false
+            settings.forgetRecent(cur.path)
             openFile(store.defaultFile(SAMPLE))
-            tab = Tab.FILES
+            showTab(Tab.FILES)
         }
     }
 
@@ -149,11 +201,12 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         dirty = true  // always write what's on screen before running
         saveNow()
         run.run(RunRequest.Script(currentFile.path), currentFile.name)
-        tab = Tab.CONSOLE
+        showTab(Tab.CONSOLE)
     }
 
     override fun onCleared() {
         saveNow()
+        analysis.stop()
     }
 
     companion object {
@@ -170,13 +223,26 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     }
 }
 
+/** Whether the app should be dark right now, given the theme setting. */
 @Composable
-fun PyriteTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = if (isSystemInDarkTheme()) darkColorScheme() else lightColorScheme(), content = content)
+fun isDark(mode: ThemeMode): Boolean = when (mode) {
+    ThemeMode.SYSTEM -> isSystemInDarkTheme()
+    ThemeMode.LIGHT -> false
+    ThemeMode.DARK -> true
 }
 
 @Composable
-fun PyriteApp(vm: AppViewModel = viewModel()) {
+fun PyriteTheme(mode: ThemeMode = ThemeMode.SYSTEM, content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = if (isDark(mode)) darkColorScheme() else lightColorScheme(), content = content)
+}
+
+@Composable
+fun PyriteApp(vm: AppViewModel = viewModel()) = PyriteTheme(vm.settings.theme) {
+    PyriteContent(vm)
+}
+
+@Composable
+private fun PyriteContent(vm: AppViewModel) {
     // Leaving the app (or being killed in the background) must not lose edits.
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) { vm.saveNow() }
 
@@ -204,8 +270,15 @@ fun PyriteApp(vm: AppViewModel = viewModel()) {
                     title = vm.store.relativePath(vm.currentFile),
                     dirty = vm.dirty,
                     fontSize = fontSize,
+                    dark = isDark(vm.settings.theme),
                     onRun = vm::runCurrentFile,
                     onFontSize = vm.settings::changeFontSize,
+                    recentFiles = vm.settings.recentFiles.filter { it != vm.currentFile.path },
+                    examples = vm.examples,
+                    onOpenRecent = { vm.openFile(File(it)) },
+                    onOpenExample = vm::openExample,
+                    onSettings = { vm.settingsOpen = true },
+                    displayName = { path -> runCatching { vm.store.relativePath(File(path)) }.getOrDefault(path) },
                 )
                 Tab.CONSOLE -> RunConsoleScreen(vm.run, fontSize = fontSize - 1)
                 Tab.REPL -> ReplScreen(vm.repl, fontSize = fontSize - 1)
@@ -218,5 +291,12 @@ fun PyriteApp(vm: AppViewModel = viewModel()) {
                 Tab.PACKAGES -> PackagesScreen(vm.packages, fontSize = fontSize - 1)
             }
         }
+    }
+    if (vm.settingsOpen) {
+        SettingsDialog(
+            settings = vm.settings,
+            onCompletion = vm::setCompletion,
+            onDismiss = { vm.settingsOpen = false },
+        )
     }
 }
