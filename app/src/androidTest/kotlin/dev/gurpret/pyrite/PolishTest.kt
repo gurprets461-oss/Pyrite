@@ -14,7 +14,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.gurpret.pyrite.settings.ThemeMode
 import dev.gurpret.pyrite.ui.AppViewModel
+import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
+import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -74,8 +76,17 @@ class PolishTest {
 
         onMain { vm.loadText("import os\n") }
         compose.onNodeWithTag("editor").performClick()
+        // Records why the completion window opens and closes, for the failure message.
+        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
         onMain {
-            vm.editor.view!!.requestFocus()
+            val view = vm.editor.view!!
+            view.replaceComponent(EditorAutoCompletion::class.java, RecordingCompletion(view, events))
+            view.subscribeAlways(SelectionChangeEvent::class.java) {
+                val line = "${SystemClock.elapsedRealtime() % 100_000} selection cause=${it.cause} col=${it.left.column}"
+                events += line
+                android.util.Log.i("PyriteCompletion", line)
+            }
+            view.requestFocus()
             vm.editor.setCursor(1, 0)
         }
         // Type at human speed: sora skips completion requests that come within 70 ms of
@@ -90,7 +101,8 @@ class PolishTest {
             val start = SystemClock.elapsedRealtime()
             val names = vm.analysis.complete(text, 2, 8, vm.currentFile.path, timeoutMs = 30_000).map { it.name }
             "text=${text.replace("\n", "\\n")} focus=${onMain { vm.editor.view!!.hasFocus() }} " +
-                "jedi now: ${names.size} items in ${SystemClock.elapsedRealtime() - start} ms"
+                "jedi now: ${names.size} items in ${SystemClock.elapsedRealtime() - start} ms. " +
+                "Completion window events:\n" + synchronized(events) { events.takeLast(60).joinToString("\n") }
         }) {
             onMain { vm.editor.view!!.getComponent(EditorAutoCompletion::class.java).isShowing }
         }
@@ -141,5 +153,32 @@ class PolishTest {
         val prefs = context.getSharedPreferences("pyrite", 0)
         assertEquals("DARK", prefs.getString("theme", null))
         assertTrue(prefs.getString("recent_files", "")!!.contains("examples/fibonacci.py"))
+    }
+}
+
+/** sora's completion window, logging each request/show/hide with its caller. */
+private class RecordingCompletion(editor: CodeEditor, private val events: MutableList<String>) :
+    EditorAutoCompletion(editor) {
+    private fun note(what: String) {
+        val caller = Throwable().stackTrace.drop(2).take(4)
+            .joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+        val line = "${SystemClock.elapsedRealtime() % 100_000} $what showing=$isShowing [$caller]"
+        events += line
+        android.util.Log.i("PyriteCompletion", line)
+    }
+
+    override fun requireCompletion() {
+        note("require")
+        super.requireCompletion()
+    }
+
+    override fun show() {
+        note("show")
+        super.show()
+    }
+
+    override fun hide() {
+        note("hide")
+        super.hide()
     }
 }
