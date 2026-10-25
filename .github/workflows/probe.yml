@@ -19,6 +19,41 @@ jobs:
           sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>&1 || echo "modprobe binder_linux failed"
           ls -l /dev/binder* 2>/dev/null || echo "no /dev/binder*"
           apt-cache policy linux-modules-extra-$(uname -r) | head -3
+      - name: redroid
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq linux-modules-extra-$(uname -r) adb >/dev/null
+          sudo modprobe binder_linux devices=binder,hwbinder,vndbinder && echo "binder ok"
+          docker run -itd --rm --privileged --name redroid -p 5555:5555 redroid/redroid:14.0.0-latest
+          adb version | head -1
+          for i in $(seq 1 60); do
+            adb connect localhost:5555 >/dev/null 2>&1 || true
+            b=$(adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            [ "$b" = "1" ] && { echo "booted after $((i*5))s"; break; }
+            sleep 5
+          done
+          adb -s localhost:5555 shell getprop ro.product.cpu.abilist
+          adb -s localhost:5555 shell getprop ro.build.version.sdk
+          adb -s localhost:5555 shell uname -m
+          adb -s localhost:5555 shell wm size
+          adb -s localhost:5555 shell ping -c 1 -W 5 pypi.org || echo "no ping"
+          adb -s localhost:5555 shell 'echo -e "GET / HTTP/1.0\r\nHost: pypi.org\r\n\r\n" | nc -w 5 pypi.org 80 | head -1' || true
+          docker logs redroid 2>&1 | tail -5
+  pages: write
+jobs:
+  arm:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Host
+        run: |
+          uname -a; nproc; free -g; df -h / | tail -1
+          ls -l /dev/kvm || echo "no /dev/kvm"
+          echo "ANDROID_HOME=$ANDROID_HOME"; ls "$ANDROID_HOME" 2>/dev/null | head
+          grep -i -E "BINDER|ASHMEM" /boot/config-$(uname -r) || echo "no kernel config"
+          lsmod | grep -i binder || echo "binder not loaded"
+          sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>&1 || echo "modprobe binder_linux failed"
+          ls -l /dev/binder* 2>/dev/null || echo "no /dev/binder*"
+          apt-cache policy linux-modules-extra-$(uname -r) | head -3
       - name: Emulator builds for linux aarch64 hosts
         run: |
           curl -sS https://dl.google.com/android/repository/repository2-3.xml -o repo.xml
