@@ -117,7 +117,7 @@ class AnalysisClient(context: Context) {
     }
 
     /** Null if the server didn't answer (unknown), empty if the code compiles. */
-    fun check(source: String, path: String?, timeoutMs: Long = 5000): List<SyntaxIssue>? {
+    fun check(source: String, path: String?, timeoutMs: Long = 30_000): List<SyntaxIssue>? {
         val r = request("check", mapOf("source" to source, "path" to path), timeoutMs) ?: return null
         return r.optJSONArray("errors").objects().map {
             SyntaxIssue(it.optInt("line", 1), it.optInt("col", 1), it.optInt("end_line", 1), it.optInt("end_col", 2), it.optString("msg"))

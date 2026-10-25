@@ -147,8 +147,12 @@ class EditorController {
         val file = path
         val generation = ++checkGeneration
         worker.execute {
-            val issues = client.check(source, file) ?: return@execute
-            main.post { if (generation == checkGeneration) applySyntaxIssues(issues) }
+            val issues = client.check(source, file)
+            main.post {
+                if (generation != checkGeneration) return@post
+                // No answer (server starting or restarting): try again shortly.
+                if (issues == null) scheduleSyntaxCheck(SYNTAX_RETRY_MS) else applySyntaxIssues(issues)
+            }
         }
     }
 
@@ -329,6 +333,7 @@ class EditorController {
 
     companion object {
         const val SYNTAX_CHECK_DELAY_MS = 600L
+        const val SYNTAX_RETRY_MS = 2000L
         const val SIGNATURE_DELAY_MS = 300L
     }
 
