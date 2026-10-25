@@ -81,7 +81,16 @@ jobs:
           git commit -q -m "Android wheels built from ${GITHUB_SHA}"
           # One commit, replaced each time, so old wheel binaries don't pile up in history.
           git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
-      - name: Pages status
+      - name: Check the index is served
         run: |
+          owner=${GITHUB_REPOSITORY%/*}
+          url="https://${owner,,}.github.io/${GITHUB_REPOSITORY#*/}/simple/"
+          for i in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            echo "$url -> $code"
+            [ "$code" = 200 ] && exit 0
+            sleep 10
+          done
           curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" || true
+          echo "::warning::GitHub Pages isn't serving $url. Enable it once: Settings > Pages > Deploy from a branch > gh-pages, / (root)."

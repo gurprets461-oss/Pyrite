@@ -31,7 +31,8 @@ case $pkg in
         # No BLAS/LAPACK for Android: numpy's own fallback routines. Skip the
         # upstream before-build, which downloads scipy-openblas.
         export CIBW_BEFORE_BUILD=""
-        export CIBW_CONFIG_SETTINGS="setup-args=-Dblas=none setup-args=-Dlapack=none build-dir=build"
+        # The extra cross file supplies the long double format numpy can't probe.
+        export CIBW_CONFIG_SETTINGS="setup-args=-Dblas=none setup-args=-Dlapack=none setup-args=--cross-file=$here/android-longdouble.cross build-dir=build"
         ;;
     pillow)
         deps=$work/pillow-deps
@@ -45,7 +46,10 @@ case $pkg in
         # the text-shaping libraries are built from meson subprojects.
         export CIBW_BEFORE_BUILD=""
         ;;
-    contourpy | kiwisolver) ;;
+    contourpy)
+        export CIBW_BEFORE_BUILD="bash $here/contourpy-before-build.sh"
+        ;;
+    kiwisolver) ;;
     *)
         echo "no build recipe for $pkg" >&2
         exit 1

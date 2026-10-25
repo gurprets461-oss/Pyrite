@@ -57,14 +57,17 @@ cmake_install "$work/freetype-$FREETYPE" -DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZI
     -DFT_DISABLE_PNG=TRUE -DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE
 
 fetch "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$LIBWEBP.tar.gz"
-cmake_install "$work/libwebp-$LIBWEBP" -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF \
+# On Android, libwebp builds the NDK's cpufeatures library for runtime CPU detection.
+cmake_install "$work/libwebp-$LIBWEBP" -DANDROID_NDK="${CC%/toolchains/*}" -DWEBP_BUILD_ANIM_UTILS=OFF -DWEBP_BUILD_CWEBP=OFF \
     -DWEBP_BUILD_DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF -DWEBP_BUILD_IMG2WEBP=OFF \
     -DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF \
     -DWEBP_BUILD_EXTRAS=OFF -DWEBP_BUILD_LIBWEBPMUX=ON
 # Pillow links webp, webpmux and webpdemux only (it adds sharpyuv just on iOS), so
-# fold libsharpyuv into libwebp.a to resolve its symbols.
-mkdir "$work/sharpyuv"
-(cd "$work/sharpyuv" && $AR x "$DEPS/lib/libsharpyuv.a" && $AR rcs "$DEPS/lib/libwebp.a" ./*.o)
+# fold libsharpyuv and cpufeatures into libwebp.a to resolve their symbols.
+for extra in sharpyuv cpufeatures-webp; do
+    mkdir "$work/$extra"
+    (cd "$work/$extra" && $AR x "$DEPS/lib/lib$extra.a" && $AR rcs "$DEPS/lib/libwebp.a" ./*.o)
+done
 
 ls -l "$DEPS/lib" "$DEPS/include"
 rm -rf "$work"
