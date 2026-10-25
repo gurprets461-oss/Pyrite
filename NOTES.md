@@ -21,13 +21,12 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - M0–M7 done (CI run 40209763735: 30 instrumented tests, 0 failed).
 - pip now uses the user scheme (`--user`, PYTHONUSERBASE in filesDir) instead of
   `--target`; `PackagesTest.d_installingTwiceInstallsNothing` (CI run 40211098571).
-- Current: **M8**. Its acceptance test passes on an arm64 device: CI run 40214530501,
-  `ScienceTest` 4/4 on redroid (Android 14 arm64-v8a) — numpy 2.5.4 aarch64 wheel,
-  `numpy.arange(10).sum() == 45`, `plt.plot([1,2,3]); plt.show()` -> 960x720 image in the
-  console — and 35/35 on the x86_64 emulator. Left: GitHub Pages isn't enabled yet, so
-  CI installed from a local copy of `gh-pages`; once the repo owner enables Pages, the
-  same tests use https://gurprets461-oss.github.io/Pyrite/simple/ directly (the stand-in
-  script steps aside when that URL answers). See "Scientific wheels (M8)".
+- M8 done: CI run 40224237930, with GitHub Pages serving
+  https://gurprets461-oss.github.io/Pyrite/simple/ (no stand-in): `ScienceTest` 4/4 on
+  redroid (Android 14 arm64-v8a) — pip took numpy/matplotlib/contourpy/kiwisolver/Pillow
+  arm64 wheels from that index, `numpy.arange(10).sum() == 45` from the aarch64 .so,
+  `plt.plot([1,2,3]); plt.show()` -> 960x720 image in the console — and 4/4 on the
+  x86_64 emulator. All milestones (M0–M8) done. See "Scientific wheels (M8)".
 
 ## pip / Android wheels (M6)
 - pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into the user
@@ -78,11 +77,11 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
     libraqm as meson subprojects). C++ wheels bundle a renamed libc++_shared.
 - The publish job merges new wheels with the ones on gh-pages, writes a PEP 503 index
   (`wheels/make_index.py`) and force-pushes a one-commit `gh-pages` branch:
-  https://gurprets461-oss.github.io/Pyrite/simple/. GitHub Pages has to be switched on
+  https://gurprets461-oss.github.io/Pyrite/simple/. GitHub Pages had to be switched on
   once by the repo owner (Settings > Pages > Deploy from a branch > gh-pages, / root):
   the workflow token gets 403 from the Pages API and pushing gh-pages doesn't enable it.
-  While Pages is off, CI serves a copy of gh-pages from the runner
-  (`scripts/wheel-index-standin.sh`) and logs a warning.
+  It's on since 2026-10-25. If the site ever stops answering, CI serves a copy of
+  gh-pages from the runner instead (`scripts/wheel-index-standin.sh`) and logs a warning.
 - App side: `pip.conf` is packed into the stdlib zip root, i.e. `sys.prefix/pip.conf`,
   pip's "site" config: `extra-index-url = <index>` and `prefer-binary = true` (Android
   can't build sdists). The URL comes from Gradle (`-Ppyrite.wheelIndex=...` overrides)
@@ -224,8 +223,9 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   "Android can't build packages from source" error.
 
 ## Open problems
-- GitHub Pages isn't enabled for the repo (needs the owner: Settings > Pages > Deploy
-  from a branch > gh-pages, / root). Until then the app's extra index returns 404 and
-  pip only sees PyPI.
+- `PolishTest.typingOsPathDotShowsCompletions` still fails now and then even though
+  jedi answers the editor text in ~70 ms with the editor focused (run 40224237930): the
+  completion window never shows. The test now logs every request/show/hide of sora's
+  completion window with its caller (tag PyriteCompletion) to find what suppresses it.
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.
