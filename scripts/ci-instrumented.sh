@@ -5,15 +5,18 @@
 set -uo pipefail
 
 adb logcat -c || true
-timeout "${PYRITE_TEST_TIMEOUT:-25m}" ./gradlew connectedDebugAndroidTest --stacktrace "$@"
-status=$?
+timeout "${PYRITE_TEST_TIMEOUT:-25m}" ./gradlew connectedDebugAndroidTest "$@" 2>&1 | tee instrumented.log
+status=${PIPESTATUS[0]}
 
-echo "::group::logcat (Pyrite-related)"
-adb logcat -d -v time 2>/dev/null \
-    | grep -E 'pyrite|Pyrite|PythonService|PythonThread|PythonInstaller|RunSession|TestRunner|AndroidRuntime|DEBUG|libc|python|faulthandler|ActivityManager.*(pyrite|:py)' \
-    | tail -n 400
-echo "::endgroup::"
-
+if [ $status -ne 0 ]; then
+    echo "logcat (Pyrite-related, last 250 lines):"
+    adb logcat -d -v time 2>/dev/null \
+        | grep -E 'pyrite|PythonService|PythonThread|PythonInstaller|RunSession|TestRunner|AndroidRuntime|DEBUG|libc|faulthandler' \
+        | grep -v -E 'Blockstore|Icing|AppInfoHelper|ProximityAuth|AiAiEcho' \
+        | tail -n 250
+    echo "Build/test errors:"
+    grep -E '^e: |error:|What went wrong|FAILED' -A4 instrumented.log | head -100 || true
+fi
 echo "Instrumented test results:"
 python3 "$(dirname "$0")/junit-summary.py" app/build/outputs/androidTest-results/connected || true
 exit $status

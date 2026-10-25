@@ -38,7 +38,14 @@ jobs:
         run: scripts/fetch-python.sh
 
       - name: Build and unit test
-        run: ./gradlew assembleDebug assembleDebugAndroidTest test --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew assembleDebug assembleDebugAndroidTest test 2>&1 | tee build.log
+
+      - name: Summarize build errors
+        if: failure()
+        run: |
+          grep -E '^e: |error:|What went wrong|FAILED|Test.*>.*FAILED' -A4 build.log | head -150 || true
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
