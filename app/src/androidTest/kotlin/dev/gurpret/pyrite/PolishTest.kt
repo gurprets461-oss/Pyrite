@@ -1,6 +1,7 @@
 package dev.gurpret.pyrite
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -59,6 +60,14 @@ class PolishTest {
         return result as T
     }
 
+    /** Recent log lines from this app's processes about Python and analysis (same UID). */
+    private fun appLog(): String = runCatching {
+        Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "-t", "2000")).inputStream
+            .bufferedReader().readLines()
+            .filter { line -> APP_TAGS.any { it in line } }
+            .takeLast(60).joinToString("\n")
+    }.getOrElse { "logcat failed: $it" }
+
     private fun waitFor(what: String, seconds: Long, diagnose: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + seconds * 1000
         while (!condition()) {
@@ -70,9 +79,17 @@ class PolishTest {
     @Test
     fun typingOsPathDotShowsCompletions() {
         val (scenario, vm) = launch()
-        // jedi takes a while to load the first time; wait for the server to answer.
-        val direct = vm.analysis.complete("import os\nos.path.", 2, 8, null, timeoutMs = 90_000).map { it.name }
-        assertTrue("jedi completions: $direct", "join" in direct && "exists" in direct)
+        // jedi takes a while to load the first time; wait for the server to answer. An
+        // empty answer means the server failed or restarted: log why and ask again.
+        val deadline = SystemClock.elapsedRealtime() + 90_000
+        var direct: List<String>
+        while (true) {
+            direct = vm.analysis.complete("import os\nos.path.", 2, 8, null, timeoutMs = 90_000).map { it.name }
+            if (direct.isNotEmpty() || SystemClock.elapsedRealtime() > deadline) break
+            Log.w("PyriteCompletion", "direct completion came back empty; app log:\n${appLog()}")
+            Thread.sleep(1000)
+        }
+        assertTrue("jedi completions: $direct\n${appLog()}", "join" in direct && "exists" in direct)
 
         onMain { vm.loadText("import os\n") }
         compose.onNodeWithTag("editor").performClick()
@@ -102,7 +119,8 @@ class PolishTest {
             val names = vm.analysis.complete(text, 2, 8, vm.currentFile.path, timeoutMs = 30_000).map { it.name }
             "text=${text.replace("\n", "\\n")} focus=${onMain { vm.editor.view!!.hasFocus() }} " +
                 "jedi now: ${names.size} items in ${SystemClock.elapsedRealtime() - start} ms. " +
-                "Completion window events:\n" + synchronized(events) { events.takeLast(60).joinToString("\n") }
+                "Completion window events:\n" + synchronized(events) { events.takeLast(60).joinToString("\n") } +
+                "\nApp log:\n" + appLog()
         }) {
             onMain { vm.editor.view!!.getComponent(EditorAutoCompletion::class.java).isShowing }
         }
@@ -155,6 +173,10 @@ class PolishTest {
         assertTrue(prefs.getString("recent_files", "")!!.contains("examples/fibonacci.py"))
     }
 }
+
+private val APP_TAGS = listOf(
+    "AnalysisClient", "RunSession", "PythonService", "PythonThread", "PythonInstaller", "Traceback", "pyrite:analysis",
+)
 
 /** sora's completion window, logging each request/show/hide with its caller. */
 private class RecordingCompletion(editor: CodeEditor, private val events: MutableList<String>) :
