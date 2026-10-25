@@ -4,7 +4,7 @@ import os
 import site
 import sys
 
-# Where pip installs packages; set by bootstrap().
+# The user site-packages folder pip installs into (PYTHONUSERBASE); set by bootstrap().
 SITE_PACKAGES = None
 
 
@@ -12,10 +12,11 @@ def bootstrap(site_packages):
     """Runs once, right after the interpreter starts."""
     global SITE_PACKAGES
     SITE_PACKAGES = site_packages
-    # pip installs here (outside the extracted stdlib, so app updates don't wipe it).
-    # addsitedir also processes .pth files, which some packages rely on.
+    # The app creates this folder before startup, so site.py has already put it on
+    # sys.path (ahead of the bundled site-packages). Cover the case where it didn't.
     os.makedirs(site_packages, exist_ok=True)
-    site.addsitedir(site_packages)
+    if site_packages not in sys.path:
+        site.addsitedir(site_packages)
 
 
 def prepare_main(path, args):

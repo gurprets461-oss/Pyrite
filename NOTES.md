@@ -21,9 +21,16 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - All milestones (M0–M7) done. CI run 40209763735: 30 instrumented tests, 0 failed.
 
 ## pip / Android wheels (M6)
-- pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into
-  `filesDir/site-packages` on first use, run in-process in the `:pip` process with
-  `--target <site-packages> --upgrade` added to `install` (see `_pyrite/pip.py`).
+- pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into the user
+  site-packages on first use, run in-process in the `:pip` process with `--user`
+  added to `install` (see `_pyrite/pip.py`). `PYTHONUSERBASE=filesDir/python-user`
+  (set before `Py_Initialize`), so packages land in
+  `filesDir/python-user/lib/python3.15/site-packages`. The app creates that folder
+  before startup: site.py only adds the user site to sys.path if it exists, and then
+  puts it ahead of the bundled site-packages. pip sees installed packages there, so a
+  second `pip install requests` is all "Requirement already satisfied"
+  (`PackagesTest.d_installingTwiceInstallsNothing`). The old `--target` folder
+  `filesDir/site-packages` is moved into the user site on first start.
   Never run pip inside the REPL's interpreter: pip >= 26.3 rejects imports made after it
   starts. REPL `pip ...` lines are intercepted by `ReplController` and sent to `:pip`.
 - sdists can't build (no subprocess/compiler on Android): only wheels install.
@@ -49,7 +56,8 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - `python/PythonThread`: the single thread that inits Python and runs everything.
 - `python/PythonInstaller`: extracts `assets/python/stdlib.zip` to `filesDir/python`,
   stamp = "<version> <sha256>" (written by Gradle task `PackPythonStdlib`); file lock
-  makes it safe across processes. pip target: `filesDir/site-packages` (`_pyrite.bootstrap`).
+  makes it safe across processes. `ensureUserSite()` creates the user site-packages
+  (`filesDir/python-user/lib/python3.15/site-packages`) that pip `--user` installs to.
 - `app/src/main/python/_pyrite/`: helpers inside the interpreter (bootstrap, prepare_main, repl).
 - Build: `app/build.gradle.kts` reads `cross-build/<triplet>/prefix`; libpython +
   `lib*_python.so` -> jniLibs; stdlib (both ABIs merged, minus test/idlelib/tkinter/
@@ -153,5 +161,3 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 ## Open problems
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.
-- pip `--target` reinstalls dependencies on each install (pip ignores already-installed
-  packages in target mode); cached wheels make it cheap, but it's not "already satisfied".

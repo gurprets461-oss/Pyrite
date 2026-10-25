@@ -30,7 +30,7 @@ An offline Python 3 IDE for Android: code editor, Run button, console with worki
 | REPL | `code.InteractiveConsole` in the `:py` process | — |
 | Autocomplete | jedi (pure Python, bundled) | — |
 | Storage | Projects in `filesDir/projects`; import/export via Storage Access Framework | — |
-| Packages | pip installing to `filesDir/site-packages`, which is on `sys.path` | — |
+| Packages | pip `--user` with `PYTHONUSERBASE` inside `filesDir`; the user site-packages is on `sys.path` | — |
 
 ## Known gotchas (pre-solved)
 - Android has no `python` executable or console; embedded mode only. Our console and REPL are app code.

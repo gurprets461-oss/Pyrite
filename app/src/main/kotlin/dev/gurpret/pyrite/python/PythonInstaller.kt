@@ -2,6 +2,7 @@ package dev.gurpret.pyrite.python
 
 import android.content.Context
 import android.util.Log
+import dev.gurpret.pyrite.BuildConfig
 import java.io.File
 import java.io.IOException
 import java.io.RandomAccessFile
@@ -14,7 +15,15 @@ import java.util.zip.ZipInputStream
  */
 class PythonInstaller(private val context: Context) {
     val home = File(context.filesDir, "python")
-    val sitePackages = File(context.filesDir, "site-packages")
+
+    /** PYTHONUSERBASE: pip installs with `--user`, so packages land in [sitePackages]. */
+    val userBase = File(context.filesDir, "python-user")
+
+    /** The user site-packages folder (`site.getusersitepackages()`), on sys.path. */
+    val sitePackages = File(userBase, "lib/python${pythonMinor(BuildConfig.PYTHON_VERSION)}/site-packages")
+
+    /** Where pip `--target` installs went before the user scheme. */
+    private val legacySitePackages = File(context.filesDir, "site-packages")
     private val stampFile = File(home, STAMP_NAME)
 
     fun bundledStamp(): String =
@@ -37,6 +46,20 @@ class PythonInstaller(private val context: Context) {
         if (!tmp.renameTo(home)) throw IOException("can't rename $tmp to $home")
         Log.i(TAG, "extracted Python stdlib in ${System.currentTimeMillis() - start} ms")
         true
+    }
+
+    /**
+     * Creates the user site-packages folder (site.py only adds it to sys.path if it
+     * exists at startup) and moves packages from the old `--target` folder into it.
+     */
+    fun ensureUserSite() = withLock {
+        if (legacySitePackages.isDirectory) {
+            sitePackages.parentFile!!.mkdirs()
+            if (sitePackages.exists() || !legacySitePackages.renameTo(sitePackages)) {
+                legacySitePackages.deleteRecursively()
+            }
+        }
+        sitePackages.mkdirs()
     }
 
     private fun extractZip(dest: File) {
@@ -73,5 +96,8 @@ class PythonInstaller(private val context: Context) {
     companion object {
         private const val TAG = "PythonInstaller"
         const val STAMP_NAME = ".pyrite-stamp"
+
+        /** "3.15.1" -> "3.15" */
+        fun pythonMinor(version: String): String = version.split('.').take(2).joinToString(".")
     }
 }

@@ -18,6 +18,7 @@ object Interpreter {
     fun initialize(context: Context) = PythonThread.call {
         val installer = PythonInstaller(context)
         installer.ensureInstalled()
+        installer.ensureUserSite()
 
         // Android only sets TMPDIR from API 33; Python's tempfile needs it.
         Os.setenv("TMPDIR", context.cacheDir.path, true)
@@ -31,6 +32,8 @@ object Interpreter {
         Os.setenv("PIP_CACHE_DIR", File(context.cacheDir, "pip").path, true)
         Os.setenv("PIP_NO_INPUT", "1", true)
         Os.setenv("PIP_ROOT_USER_ACTION", "ignore", true)
+        // pip installs with --user into this base; site.py puts its site-packages on sys.path.
+        Os.setenv("PYTHONUSERBASE", installer.userBase.path, true)
 
         NativeBridge.initialize(
             installer.home.path,

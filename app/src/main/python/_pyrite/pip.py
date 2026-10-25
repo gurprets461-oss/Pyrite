@@ -2,8 +2,10 @@
 
 Android can't exec a `python` binary, so pip runs in-process. It comes from the wheel
 CPython bundles for ensurepip, unpacked into the user site-packages folder the first
-time it's needed. Installs go there too (`--target`), since the stdlib folder is
-replaced whenever the app updates.
+time it's needed. Installs go there too (`--user`, with PYTHONUSERBASE inside the
+app's files dir), since the stdlib folder is replaced whenever the app updates.
+Unlike `--target`, the user scheme lets pip see what's already installed, so
+dependencies that are already satisfied aren't reinstalled.
 """
 
 import glob
@@ -13,7 +15,7 @@ import os
 
 import _pyrite
 
-_TARGET_OPTIONS = ("-t", "--target", "--user", "--prefix", "--root")
+_LOCATION_OPTIONS = ("-t", "--target", "--user", "--prefix", "--root")
 
 
 def ensure_pip():
@@ -33,15 +35,15 @@ def ensure_pip():
 
 
 def prepare_args(args):
-    """Points `pip install` at our site-packages unless the user chose a location."""
+    """Makes `pip install` a user install unless the user chose a location."""
     args = list(args)
     if args and args[0] == "uninstall" and "-y" not in args and "--yes" not in args:
         args.insert(1, "-y")  # there's no terminal to answer pip's prompt
     if args and args[0] == "install" and not any(
-        a == opt or a.startswith(opt + "=") for a in args for opt in _TARGET_OPTIONS
+        a == opt or a.startswith(opt + "=") for a in args for opt in _LOCATION_OPTIONS
     ):
-        # --upgrade: with --target, pip only replaces existing folders when asked to.
-        args[1:1] = ["--target", _pyrite.SITE_PACKAGES, "--upgrade"]
+        # Console scripts can't be run on Android anyway, so skip pip's PATH warning.
+        args[1:1] = ["--user", "--no-warn-script-location"]
     return args
 
 

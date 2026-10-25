@@ -22,6 +22,7 @@ import dev.gurpret.pyrite.runner.Runner
 import dev.gurpret.pyrite.ui.AppViewModel
 import dev.gurpret.pyrite.ui.ReplController
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.FixMethodOrder
@@ -31,7 +32,10 @@ import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import org.junit.runners.MethodSorters
 
-/** M6: pip installs from PyPI into filesDir/site-packages; the packages work. Needs network. */
+/**
+ * M6: pip installs from PyPI into the user site-packages (PYTHONUSERBASE inside
+ * filesDir); the packages work. Needs network.
+ */
 @OptIn(ExperimentalTestApi::class)
 @RunWith(AndroidJUnit4::class)
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -145,6 +149,38 @@ class PackagesTest {
         )
         probe.stdout.lines().filter { it.isNotBlank() }.forEach { Log.i(TAG, "import $it") }
     }
+
+    @Test
+    fun d_installingTwiceInstallsNothing() {
+        val sitePackages = PythonInstaller(context).sitePackages
+        sitePackages.deleteRecursively()
+        // Installs go to the user scheme, which site.py puts on sys.path.
+        val where = run(RunRequest.Code("import site\nprint(site.ENABLE_USER_SITE)\nprint(site.getusersitepackages())"))
+        assertEquals(where.stderr, listOf("True", sitePackages.path), where.stdout.trim().lines())
+
+        val first = run(RunRequest.Pip(listOf("install", "requests")), 600)
+        assertEquals(first.stdout + first.stderr, RunResult.Exited(0), first.result)
+        assertTrue(first.stdout, Regex("Successfully installed .*requests-").containsMatchIn(first.stdout))
+        val before = snapshot(sitePackages)
+        assertTrue("$before", before.keys.any { it.startsWith("urllib3-") && it.endsWith(".dist-info") })
+
+        // requests and all its dependencies are already there: nothing to fetch or install.
+        val second = run(RunRequest.Pip(listOf("install", "requests")), 600)
+        val out = second.stdout + second.stderr
+        assertEquals(out, RunResult.Exited(0), second.result)
+        assertTrue(out, "Requirement already satisfied: requests" in out)
+        for (dep in listOf("charset", "idna", "urllib3", "certifi")) {
+            assertTrue(out, Regex("Requirement already satisfied: $dep", RegexOption.IGNORE_CASE).containsMatchIn(out))
+        }
+        for (word in listOf("Collecting", "Downloading", "Installing collected packages", "Successfully installed")) {
+            assertFalse("second install did '$word':\n$out", word in out)
+        }
+        assertEquals("site-packages changed", before, snapshot(sitePackages))
+    }
+
+    /** Top-level entries of [dir] with their modification times. */
+    private fun snapshot(dir: java.io.File): Map<String, Long> =
+        dir.listFiles().orEmpty().associate { it.name to it.lastModified() }
 
     companion object {
         private const val TAG = "PyriteWheels"
