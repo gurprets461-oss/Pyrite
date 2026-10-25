@@ -41,6 +41,8 @@ if ! command -v java >/dev/null; then
 fi
 
 mkdir -p "$SDK"
+# sdkmanager rejects archive entries if the SDK path isn't canonical (e.g. has "..").
+SDK=$(cd "$SDK" && pwd -P)
 SDKMANAGER="$SDK/cmdline-tools/latest/bin/sdkmanager"
 
 if [ ! -x "$SDKMANAGER" ]; then

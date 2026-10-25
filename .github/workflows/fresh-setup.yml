@@ -13,14 +13,6 @@ jobs:
   fresh:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    env:
-      # Point at an empty directory so the runner's preinstalled SDK isn't used.
-      ANDROID_HOME: ${{ github.workspace }}/../fresh-sdk
-      ANDROID_SDK_ROOT: ${{ github.workspace }}/../fresh-sdk
-      ANDROID_NDK_HOME: ''
-      ANDROID_NDK_ROOT: ''
-      ANDROID_NDK: ''
-      ANDROID_NDK_LATEST_HOME: ''
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -28,6 +20,14 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: setup-sdk.sh && fetch-python.sh && ./gradlew assembleDebug
+        env:
+          # An empty directory, so the runner's preinstalled SDK isn't used.
+          ANDROID_HOME: ${{ runner.temp }}/fresh-sdk
+          ANDROID_SDK_ROOT: ${{ runner.temp }}/fresh-sdk
+          ANDROID_NDK_HOME: ''
+          ANDROID_NDK_ROOT: ''
+          ANDROID_NDK: ''
+          ANDROID_NDK_LATEST_HOME: ''
         run: |
           test ! -e "$ANDROID_HOME"
           scripts/setup-sdk.sh && scripts/fetch-python.sh && ./gradlew assembleDebug
