@@ -3,6 +3,7 @@
 import os
 import site
 import sys
+import uuid
 
 # The user site-packages folder pip installs into (PYTHONUSERBASE); set by bootstrap().
 SITE_PACKAGES = None
@@ -17,6 +18,32 @@ def bootstrap(site_packages):
     os.makedirs(site_packages, exist_ok=True)
     if site_packages not in sys.path:
         site.addsitedir(site_packages)
+
+
+# The console shows an image when it sees this escape sequence (OSC) on stdout/stderr:
+# ESC ] pyrite-image ; <absolute path> BEL
+IMAGE_OSC = "\x1b]pyrite-image;"
+
+
+def new_image_path(suffix=".png"):
+    """A fresh file path for an image the console will show (in the app's cache)."""
+    folder = os.environ.get("PYRITE_IMAGE_DIR") or os.path.join(
+        os.environ.get("TMPDIR", "/tmp"), "pyrite-images"
+    )
+    os.makedirs(folder, exist_ok=True)
+    return os.path.join(folder, uuid.uuid4().hex + suffix)
+
+
+def show_image(path):
+    """Shows an image file (PNG, JPEG, ...) in the console, after the output so far."""
+    for stream in (sys.stdout, sys.__stdout__):
+        try:
+            stream.flush()
+        except (AttributeError, OSError, ValueError):
+            pass
+    # sys.__stdout__: the console, even if the program redirected sys.stdout.
+    sys.__stdout__.write(f"{IMAGE_OSC}{os.path.abspath(path)}\a")
+    sys.__stdout__.flush()
 
 
 def prepare_main(path, args):

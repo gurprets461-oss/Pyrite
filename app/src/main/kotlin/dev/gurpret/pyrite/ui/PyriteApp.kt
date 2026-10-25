@@ -65,6 +65,15 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     val analysis = AnalysisClient(app)
     var settingsOpen by mutableStateOf(false)
 
+    init {
+        // Consoles start empty, so images shown by earlier sessions (plt.show()) are unused.
+        val images = dev.gurpret.pyrite.python.Interpreter.imageDir(app)
+        kotlin.concurrent.thread(name = "image-cleanup") {
+            val cutoff = System.currentTimeMillis() - 60_000
+            images.listFiles()?.filter { it.lastModified() < cutoff }?.forEach { it.delete() }
+        }
+    }
+
     // Restore the last tab, except the console: its output isn't kept across launches.
     var tab by mutableStateOf(
         settings.lastTab?.let { runCatching { Tab.valueOf(it) }.getOrNull() }?.takeIf { it != Tab.CONSOLE } ?: Tab.EDITOR,

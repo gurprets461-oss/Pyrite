@@ -12,6 +12,7 @@ class AnsiParserTest {
         override fun newline() { events += "NL" }
         override fun carriageReturn() { events += "CR" }
         override fun backspace() { events += "BS" }
+        override fun osc(payload: String) { events += "OSC($payload)" }
     }
     private val parser = AnsiParser()
 
@@ -55,8 +56,12 @@ class AnsiParserTest {
 
     @Test
     fun nonSgrSequencesAreDropped() {
-        parser.feed("a\u001b[2Kb\u001b]0;title\u0007c\u001b(Bd", sink)
-        assertEquals(listOf("T(abcd)"), events)
+        parser.feed("a\u001b[2Kb\u001b(Bc", sink)
+        assertEquals(listOf("T(abc)"), events)
+        // OSC payloads go to the sink (the buffer ignores all but image markers).
+        events.clear()
+        parser.feed("a\u001b]0;title\u0007b", sink)
+        assertEquals(listOf("T(a)", "OSC(0;title)", "T(b)"), events)
     }
 
     @Test
@@ -77,5 +82,19 @@ class AnsiParserTest {
         parser.feed("\u001b[31m", sink)
         parser.feed("still red", sink)
         assertEquals(listOf("T(still red,$red)"), events)
+    }
+
+    @Test
+    fun oscPayloadsArePassedOn() {
+        parser.feed("a\u001b]pyrite-image;/x/1.png\u0007b\u001b]0;title\u001b\\c", sink)
+        assertEquals(listOf("T(a)", "OSC(pyrite-image;/x/1.png)", "T(b)", "OSC(0;title)", "T(c)"), events)
+    }
+
+    @Test
+    fun oscSplitAcrossChunks() {
+        parser.feed("x\u001b]pyrite-im", sink)
+        parser.feed("age;/p.png", sink)
+        parser.feed("\u0007y", sink)
+        assertEquals(listOf("T(x)", "OSC(pyrite-image;/p.png)", "T(y)"), events)
     }
 }

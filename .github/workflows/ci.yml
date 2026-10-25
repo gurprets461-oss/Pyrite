@@ -64,6 +64,13 @@ jobs:
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
 
+      - name: Upload test APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug-androidTest
+          path: app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          if-no-files-found: error
+
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v7
@@ -107,6 +114,11 @@ jobs:
       - name: Fetch Python
         run: scripts/fetch-python.sh
 
+      - name: Wheel index (local stand-in while GitHub Pages is off)
+        run: |
+          arg=$(scripts/wheel-index-standin.sh 10.0.2.2)
+          echo "WHEEL_ARGS=${arg:+-Pandroid.testInstrumentationRunnerArguments.$arg}" >> "$GITHUB_ENV"
+
       - name: Run instrumented tests
         uses: reactivecircus/android-emulator-runner@v2.38.0
         with:
@@ -116,7 +128,7 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: scripts/ci-instrumented.sh
+          script: scripts/ci-instrumented.sh $WHEEL_ARGS
 
       - name: Upload test summary
         if: always()
@@ -137,22 +149,57 @@ jobs:
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
 
+  # A real arm64-v8a Android device: redroid (Android 14 in a container) on GitHub's
+  # arm64 runner, which has no KVM for the emulator. Runs the M8 acceptance tests.
+  arm64:
+    name: arm64 device tests (redroid)
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: '{app-debug,app-debug-androidTest}'
+          merge-multiple: true
+          path: apks
+
+      - name: Start redroid
+        run: scripts/redroid-start.sh
+
+      - name: Run tests on arm64
+        run: |
+          arg=$(scripts/wheel-index-standin.sh 172.17.0.1)  # the host, from the container
+          scripts/device-tests.sh localhost:5555 apks dev.gurpret.pyrite.ScienceTest $arg
+
+      - name: Upload arm64 results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arm64-results
+          path: |
+            device-summary.txt
+            device-errors.txt
+            plot-screenshot.png
+          if-no-files-found: ignore
+
   # A short log to read results from: test summary and build errors only.
   report:
     name: Report
-    needs: [build, instrumented]
+    needs: [build, instrumented, arm64]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v8
         continue-on-error: true
         with:
-          pattern: '{test-summary,build-errors}'
+          pattern: '{test-summary,build-errors,arm64-results}'
           merge-multiple: true
       - name: Results
         run: |
-          echo "build: ${{ needs.build.result }}  instrumented: ${{ needs.instrumented.result }}"
-          for f in build-errors.txt test-errors.txt test-summary.txt; do
+          echo "build: ${{ needs.build.result }}  instrumented: ${{ needs.instrumented.result }}  arm64: ${{ needs.arm64.result }}"
+          for f in build-errors.txt test-errors.txt test-summary.txt device-summary.txt device-errors.txt; do
             [ -f "$f" ] && { echo "=== $f"; cat "$f"; }
           done
           true

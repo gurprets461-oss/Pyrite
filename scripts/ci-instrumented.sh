@@ -21,5 +21,5 @@ fi
 echo "Instrumented test results:"
 python3 "$(dirname "$0")/junit-summary.py" app/build/outputs/androidTest-results/connected 2>&1 | tee test-summary.txt || true
 # Exploratory results some tests log (e.g. which Android wheels work).
-adb logcat -d -s PyriteWheels:I 2>/dev/null | grep PyriteWheels | tee -a test-summary.txt || true
+adb logcat -d -s PyriteWheels:I PyriteScience:I PyriteScience:W 2>/dev/null | grep -E 'Pyrite(Wheels|Science)' | tee -a test-summary.txt || true
 exit $status
