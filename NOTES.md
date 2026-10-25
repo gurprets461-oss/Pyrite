@@ -212,6 +212,11 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 - jedi picks a "same environment" when sys.executable's basename starts with "python",
   then tries to spawn it. Always pass `environment=jedi.InterpreterEnvironment()`.
 - Input written to a `RunSession` before the service connects is queued, not dropped.
+- Typing sends one completion request per keystroke; the analysis server used to answer
+  every one in order, so the last (the only one sora still waits for) could sit behind
+  7 stale jedi calls and miss the editor's 3 s timeout: no popup (PolishTest failed in 2
+  of 5 CI runs). The server now reads all queued requests and answers only the newest
+  check/complete/signature (older ones get `{"superseded": true}`); timeout is 8 s.
 - pip silently ignores a plain-http index unless its host is passed with
   `--trusted-host` (the CI stand-in index needs it).
 - With no matching wheel, pip falls back to the sdist and tries to run `sys.executable`
@@ -222,7 +227,5 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 - GitHub Pages isn't enabled for the repo (needs the owner: Settings > Pages > Deploy
   from a branch > gh-pages, / root). Until then the app's extra index returns 404 and
   pip only sees PyPI.
-- `PolishTest.typingOsPathDotShowsCompletions` timed out once waiting for the completion
-  window (CI run 40213618581) and passed in the runs before and after; watch for it.
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.

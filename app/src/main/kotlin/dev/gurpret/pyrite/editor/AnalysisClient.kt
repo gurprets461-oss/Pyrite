@@ -86,11 +86,14 @@ class AnalysisClient(context: Context) {
         main.post { ensureSession().sendInput(req.toString() + "\n") }
         return try {
             val reply = future.get(timeoutMs, TimeUnit.MILLISECONDS)
-            if (reply.has("error")) {
-                Log.w(TAG, "$type failed: ${reply.optString("error")}")
-                null
-            } else {
-                reply
+            when {
+                reply.has("error") -> {
+                    Log.w(TAG, "$type failed: ${reply.optString("error")}")
+                    null
+                }
+                // A newer request of the same type was already waiting; this one wasn't run.
+                reply.optBoolean("superseded") -> null
+                else -> reply
             }
         } catch (e: Exception) {
             null
@@ -99,7 +102,7 @@ class AnalysisClient(context: Context) {
         }
     }
 
-    fun complete(source: String, line: Int, col: Int, path: String?, timeoutMs: Long = 3000): List<Completion> {
+    fun complete(source: String, line: Int, col: Int, path: String?, timeoutMs: Long = 8000): List<Completion> {
         val r = request("complete", mapOf("source" to source, "line" to line, "col" to col, "path" to path), timeoutMs)
             ?: return emptyList()
         return r.optJSONArray("items").objects().map {

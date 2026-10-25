@@ -57,10 +57,10 @@ class PolishTest {
         return result as T
     }
 
-    private fun waitFor(what: String, seconds: Long, condition: () -> Boolean) {
+    private fun waitFor(what: String, seconds: Long, diagnose: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + seconds * 1000
         while (!condition()) {
-            if (SystemClock.elapsedRealtime() > deadline) fail("timed out waiting for $what")
+            if (SystemClock.elapsedRealtime() > deadline) fail("timed out waiting for $what. ${diagnose()}")
             Thread.sleep(100)
         }
     }
@@ -84,7 +84,14 @@ class PolishTest {
             instrumentation.sendStringSync(c.toString())
             Thread.sleep(200)
         }
-        waitFor("the completion window", 30) {
+        waitFor("the completion window", 30, diagnose = {
+            // What the editor would have asked jedi, and how long jedi takes to answer now.
+            val text = onMain { vm.editor.text }
+            val start = SystemClock.elapsedRealtime()
+            val names = vm.analysis.complete(text, 2, 8, vm.currentFile.path, timeoutMs = 30_000).map { it.name }
+            "text=${text.replace("\n", "\\n")} focus=${onMain { vm.editor.view!!.hasFocus() }} " +
+                "jedi now: ${names.size} items in ${SystemClock.elapsedRealtime() - start} ms"
+        }) {
             onMain { vm.editor.view!!.getComponent(EditorAutoCompletion::class.java).isShowing }
         }
         assertEquals("import os\nos.path.", onMain { vm.editor.text })
