@@ -4,21 +4,10 @@ on:
     paths: ['.github/workflows/probe.yml']
 permissions:
   contents: read
-  pages: write
 jobs:
   arm:
     runs-on: ubuntu-24.04-arm
     steps:
-      - name: Host
-        run: |
-          uname -a; nproc; free -g; df -h / | tail -1
-          ls -l /dev/kvm || echo "no /dev/kvm"
-          echo "ANDROID_HOME=$ANDROID_HOME"; ls "$ANDROID_HOME" 2>/dev/null | head
-          grep -i -E "BINDER|ASHMEM" /boot/config-$(uname -r) || echo "no kernel config"
-          lsmod | grep -i binder || echo "binder not loaded"
-          sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>&1 || echo "modprobe binder_linux failed"
-          ls -l /dev/binder* 2>/dev/null || echo "no /dev/binder*"
-          apt-cache policy linux-modules-extra-$(uname -r) | head -3
       - name: redroid
         run: |
           sudo apt-get update -qq
@@ -37,67 +26,4 @@ jobs:
           adb -s localhost:5555 shell uname -m
           adb -s localhost:5555 shell wm size
           adb -s localhost:5555 shell ping -c 1 -W 5 pypi.org || echo "no ping"
-          adb -s localhost:5555 shell 'echo -e "GET / HTTP/1.0\r\nHost: pypi.org\r\n\r\n" | nc -w 5 pypi.org 80 | head -1' || true
           docker logs redroid 2>&1 | tail -5
-  pages: write
-jobs:
-  arm:
-    runs-on: ubuntu-24.04-arm
-    steps:
-      - name: Host
-        run: |
-          uname -a; nproc; free -g; df -h / | tail -1
-          ls -l /dev/kvm || echo "no /dev/kvm"
-          echo "ANDROID_HOME=$ANDROID_HOME"; ls "$ANDROID_HOME" 2>/dev/null | head
-          grep -i -E "BINDER|ASHMEM" /boot/config-$(uname -r) || echo "no kernel config"
-          lsmod | grep -i binder || echo "binder not loaded"
-          sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>&1 || echo "modprobe binder_linux failed"
-          ls -l /dev/binder* 2>/dev/null || echo "no /dev/binder*"
-          apt-cache policy linux-modules-extra-$(uname -r) | head -3
-      - name: Emulator builds for linux aarch64 hosts
-        run: |
-          curl -sS https://dl.google.com/android/repository/repository2-3.xml -o repo.xml
-          python3 - <<'EOF'
-          import re
-          xml = open('repo.xml').read()
-          for m in re.finditer(r'<remotePackage path="emulator">(.*?)</remotePackage>', xml, re.S):
-              body = m.group(1)
-              rev = re.search(r'<major>(\d+)</major><minor>(\d+)</minor><micro>(\d+)</micro>', body)
-              chan = re.search(r'channelRef ref="(\w+)"', body)
-              for a in re.finditer(r'<archive>(.*?)</archive>', body, re.S):
-                  url = re.search(r'<url>(.*?)</url>', a.group(1)).group(1)
-                  print(rev.groups() if rev else '?', chan.group(1) if chan else '', url)
-          EOF
-      - name: KVM usable?
-        run: |
-          if [ -e /dev/kvm ]; then
-            sudo chmod 666 /dev/kvm
-            python3 -c "import fcntl,os; fd=os.open('/dev/kvm', os.O_RDWR); print('KVM_GET_API_VERSION', fcntl.ioctl(fd, 0xAE00))"
-          fi
-      - name: redroid
-        run: |
-          sudo apt-get install -y -qq linux-modules-extra-$(uname -r) >/dev/null 2>&1 || echo "no modules-extra"
-          sudo modprobe binder_linux devices=binder,hwbinder,vndbinder 2>&1 && echo "binder ok" || echo "binder modprobe failed"
-          ls -l /dev/binder* 2>/dev/null || true
-          timeout 600 docker run -itd --rm --privileged --name redroid -p 5555:5555 redroid/redroid:14.0.0-latest 2>&1 | tail -2 || true
-          sleep 60; docker logs redroid 2>&1 | tail -20 || true
-          sudo apt-get install -y -qq adb >/dev/null 2>&1 || true
-          adb connect localhost:5555 || true
-          for i in $(seq 1 30); do
-            b=$(adb -s localhost:5555 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            [ "$b" = "1" ] && { echo "booted after ${i}0s"; break; }
-            sleep 10
-          done
-          adb -s localhost:5555 shell getprop ro.product.cpu.abilist || true
-          adb -s localhost:5555 shell getprop ro.build.version.sdk || true
-  pages:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Pages API with GITHUB_TOKEN
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          api=https://api.github.com/repos/$GITHUB_REPOSITORY/pages
-          h=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
-          echo "GET:"; curl -sS "${h[@]}" $api
-          echo "POST:"; curl -sS -X POST "${h[@]}" $api -d '{"build_type":"workflow"}'
