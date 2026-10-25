@@ -55,10 +55,10 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** typing `os.path.` shows a completion list; a syntax error is underlined without running.
 
 ## M8 — Scientific wheels
-- [ ] Check https://beeware.org/mobile-wheels for existing Android wheels; record the findings in NOTES.md
-- [ ] Build the missing wheels (arm64-v8a + x86_64) with cibuildwheel in GitHub Actions: numpy, Pillow, then matplotlib (plus its compiled dependencies)
-- [ ] Publish them as a simple package index on GitHub Pages; add it as an extra index in the app's pip config
-- [ ] `plt.show()` renders the figure as an image in the console
+- [x] Check https://beeware.org/mobile-wheels for existing Android wheels; record the findings in NOTES.md
+- [x] Build the missing wheels (arm64-v8a + x86_64) with cibuildwheel in GitHub Actions: numpy, Pillow, then matplotlib (plus its compiled dependencies)
+- [ ] Publish them as a simple package index on GitHub Pages; add it as an extra index in the app's pip config (index on `gh-pages` and pip config done; GitHub Pages must be enabled in the repo settings)
+- [x] `plt.show()` renders the figure as an image in the console
 **Done when:** on an arm64 device, `numpy.arange(10).sum() == 45` and `plt.plot([1,2,3]); plt.show()` shows a plot.
 
 ## Later (not v1)

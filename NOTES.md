@@ -21,8 +21,13 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - M0–M7 done (CI run 40209763735: 30 instrumented tests, 0 failed).
 - pip now uses the user scheme (`--user`, PYTHONUSERBASE in filesDir) instead of
   `--target`; `PackagesTest.d_installingTwiceInstallsNothing` (CI run 40211098571).
-- Current: **M8** (Android wheels for numpy/Pillow/matplotlib, index on GitHub Pages,
-  plt.show() images). See "Scientific wheels (M8)".
+- Current: **M8**. Its acceptance test passes on an arm64 device: CI run 40214530501,
+  `ScienceTest` 4/4 on redroid (Android 14 arm64-v8a) — numpy 2.5.4 aarch64 wheel,
+  `numpy.arange(10).sum() == 45`, `plt.plot([1,2,3]); plt.show()` -> 960x720 image in the
+  console — and 35/35 on the x86_64 emulator. Left: GitHub Pages isn't enabled yet, so
+  CI installed from a local copy of `gh-pages`; once the repo owner enables Pages, the
+  same tests use https://gurprets461-oss.github.io/Pyrite/simple/ directly (the stand-in
+  script steps aside when that URL answers). See "Scientific wheels (M8)".
 
 ## pip / Android wheels (M6)
 - pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into the user
@@ -214,5 +219,10 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   "Android can't build packages from source" error.
 
 ## Open problems
+- GitHub Pages isn't enabled for the repo (needs the owner: Settings > Pages > Deploy
+  from a branch > gh-pages, / root). Until then the app's extra index returns 404 and
+  pip only sees PyPI.
+- `PolishTest.typingOsPathDotShowsCompletions` timed out once waiting for the completion
+  window (CI run 40213618581) and passed in the runs before and after; watch for it.
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.
