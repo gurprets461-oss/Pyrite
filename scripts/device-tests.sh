@@ -16,7 +16,7 @@ adb() { command adb -s "$serial" "$@"; }
 adb install -r -t "$apks/app-debug.apk"
 adb install -r -t "$apks/app-debug-androidTest.apk"
 adb logcat -c || true
-timeout "${PYRITE_TEST_TIMEOUT:-40m}" command adb -s "$serial" shell am instrument -w -r \
+timeout "${PYRITE_TEST_TIMEOUT:-40m}" adb -s "$serial" shell am instrument -w -r \
     -e class "$classes" "${extra[@]}" dev.gurpret.pyrite.test/androidx.test.runner.AndroidJUnitRunner \
     | tr -d '\r' | tee am-instrument.log
 python3 "$(dirname "$0")/am-instrument-summary.py" am-instrument.log > device-summary.txt

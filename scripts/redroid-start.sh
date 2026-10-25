@@ -18,5 +18,11 @@ for i in $(seq 1 90); do
     sleep 2
 done
 adb -s localhost:5555 wait-for-device
+# Ready for UI tests: screen on and unlocked, no animations.
+for cmd in "svc power stayon true" "input keyevent KEYCODE_WAKEUP" "wm dismiss-keyguard" \
+    "settings put global window_animation_scale 0" "settings put global transition_animation_scale 0" \
+    "settings put global animator_duration_scale 0"; do
+    adb -s localhost:5555 shell "$cmd" || true
+done
 echo "abi: $(adb -s localhost:5555 shell getprop ro.product.cpu.abi | tr -d '\r')," \
     "API $(adb -s localhost:5555 shell getprop ro.build.version.sdk | tr -d '\r')"
