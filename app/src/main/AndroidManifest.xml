@@ -22,6 +22,11 @@
             android:name=".runner.PythonService"
             android:exported="false"
             android:process=":py" />
+        <!-- The REPL lives in its own process, so it survives script runs. -->
+        <service
+            android:name=".runner.ReplService"
+            android:exported="false"
+            android:process=":repl" />
     </application>
 
 </manifest>

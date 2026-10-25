@@ -2,8 +2,6 @@ package dev.gurpret.pyrite.python
 
 import android.content.Context
 import android.os.ParcelFileDescriptor
-import android.system.Os
-import java.io.FileDescriptor
 import java.io.InputStreamReader
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -51,10 +49,10 @@ object InProcessPython {
             // Pipes keep order, so a marker written now arrives after all the run's output.
             PythonThread.call {
                 val bytes = MARKER.toByteArray()
-                Os.write(FileDescriptor.out, bytes, 0, bytes.size)
-                Os.write(FileDescriptor.err, bytes, 0, bytes.size)
+                StdFds.write(1, bytes)
+                StdFds.write(2, bytes)
             }
-            c.synced.await(10, TimeUnit.SECONDS)
+            check(c.synced.await(10, TimeUnit.SECONDS)) { "output sync marker never arrived" }
             return Result(status, c.out.toString(), c.err.toString())
         } finally {
             collector = null

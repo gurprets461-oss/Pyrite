@@ -2,3 +2,6 @@
 dev/gurpret/pyrite/BuildAbisTest.kt
 dev/gurpret/pyrite/python/PyLiteralTest.kt
 dev/gurpret/pyrite/python/MarkerScannerTest.kt
+dev/gurpret/pyrite/console/AnsiParserTest.kt
+dev/gurpret/pyrite/console/ConsoleBufferTest.kt
+dev/gurpret/pyrite/console/CommandHistoryTest.kt

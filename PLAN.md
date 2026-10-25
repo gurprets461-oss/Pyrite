@@ -16,11 +16,11 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** instrumented test runs `import sys, json, sqlite3, ssl; print(sum(range(10)))` and asserts output `45` with no exception.
 
 ## M2 — Runner process
-- [ ] `PythonService` in `:py` process; init + execution on one dedicated thread
-- [ ] fds 0/1/2 piped to the UI; stdout vs stderr distinguished
-- [ ] `input()` round-trips through the UI
-- [ ] Stop (kill process) and Ctrl+C (KeyboardInterrupt, then kill after 2 s)
-- [ ] Tracebacks shown; `sys.exit(n)` shows exit code; native crash in `:py` doesn't take down the UI
+- [x] `PythonService` in `:py` process; init + execution on one dedicated thread
+- [x] fds 0/1/2 piped to the UI; stdout vs stderr distinguished
+- [x] `input()` round-trips through the UI
+- [x] Stop (kill process) and Ctrl+C (KeyboardInterrupt, then kill after 2 s)
+- [x] Tracebacks shown; `sys.exit(n)` shows exit code; native crash in `:py` doesn't take down the UI
 **Done when:** instrumented tests pass for: print; `input()` echo; `while True: pass` stopped within 3 s; `1/0` shows a traceback; `import os; os.abort()` → UI survives and reports the crash.
 
 ## M3 — Console + REPL

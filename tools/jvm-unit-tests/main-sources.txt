@@ -2,3 +2,6 @@
 dev/gurpret/pyrite/BuildAbis.kt
 dev/gurpret/pyrite/python/PyLiteral.kt
 dev/gurpret/pyrite/python/MarkerScanner.kt
+dev/gurpret/pyrite/console/Ansi.kt
+dev/gurpret/pyrite/console/ConsoleBuffer.kt
+dev/gurpret/pyrite/console/CommandHistory.kt

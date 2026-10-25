@@ -5,5 +5,8 @@ import sys
 
 
 def main():
-    banner = f"Python {sys.version} on {sys.platform}\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information."
-    code.interact(banner=banner, exitmsg="")
+    # code.interact() would print the banner to stderr, which the console shows as
+    # an error color; print it to stdout instead.
+    print(f"Python {sys.version} on {sys.platform}")
+    print('Type "help", "copyright", "credits" or "license" for more information.')
+    code.interact(banner="", exitmsg="")

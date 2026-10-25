@@ -9,8 +9,7 @@ import android.util.Log
 import dev.gurpret.pyrite.python.Interpreter
 import dev.gurpret.pyrite.python.NativeBridge
 import dev.gurpret.pyrite.python.PythonThread
-import java.io.FileDescriptor
-import java.io.FileOutputStream
+import dev.gurpret.pyrite.python.StdFds
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -18,7 +17,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * request on [PythonThread] and is then killed by the client, so every run gets a
  * fresh interpreter, and a crash here can't take down the UI.
  */
-class PythonService : Service() {
+open class PythonService : Service() {
     private val used = AtomicBoolean(false)
 
     override fun onCreate() {
@@ -83,7 +82,7 @@ class PythonService : Service() {
 
     private fun writeStderr(s: String) {
         // System.err goes to logcat on Android; fd 2 is the client's stderr pipe.
-        runCatching { FileOutputStream(FileDescriptor.err).apply { write(s.toByteArray()); flush() } }
+        runCatching { StdFds.write(2, s.toByteArray()) }
     }
 
     companion object {

@@ -5,23 +5,28 @@ import android.os.Handler
 import android.os.Looper
 
 /**
- * Starts runs one at a time. A new run stops the current one and waits for its
- * process to die first, so it can never land in a used interpreter.
+ * Starts runs, one at a time per process slot (`:py` for scripts, `:repl` for the
+ * REPL). A new run stops the slot's current one and waits for its process to die
+ * first, so it can never land in a used interpreter.
  */
 object Runner {
     private val main = Handler(Looper.getMainLooper())
-    private var current: RunSession? = null  // main thread only
+    private val current = mutableMapOf<Class<out PythonService>, RunSession>()  // main thread only
+
+    fun serviceFor(request: RunRequest): Class<out PythonService> =
+        if (request is RunRequest.Repl) ReplService::class.java else PythonService::class.java
 
     fun start(context: Context, request: RunRequest, listener: RunSession.Listener): RunSession {
-        val session = RunSession(context, request, listener)
+        val session = RunSession(context, request, listener, serviceFor(request))
         val launch = Runnable {
-            val previous = current
-            current = session
+            val slot = session.serviceClass
+            val previous = current[slot]
+            current[slot] = session
             if (previous == null || previous.isFinished) {
                 session.start()
             } else {
                 previous.stop()
-                previous.whenFinished { if (current === session) session.start() }
+                previous.whenFinished { if (current[slot] === session) session.start() else session.stop() }
             }
         }
         if (Looper.myLooper() == Looper.getMainLooper()) launch.run() else main.post(launch)

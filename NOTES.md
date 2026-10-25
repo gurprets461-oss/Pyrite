@@ -82,5 +82,13 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   once a job completes; the run status can lag, so don't mistake a slow status for a hang).
 - Maven Central sometimes answers 429; `repo1.maven.org` + retry works.
 
+## Gotchas found so far
+- Android's `FileDescriptor.out/err` are dups taken at startup: after `dup2()` they still
+  point at /dev/null. Write to the real fd 1/2 via `StdFds` (ParcelFileDescriptor.fromFd).
+- CPython on Android redirects sys.stdout/stderr to logcat when `sys.executable` is empty;
+  we set a (never executed) executable path to keep them on fds 1/2.
+- A process that dies while still bound with BIND_AUTO_CREATE gets restarted by the
+  system; `RunSession` unbinds as soon as the death recipient fires.
+
 ## Open problems
 - (none yet)

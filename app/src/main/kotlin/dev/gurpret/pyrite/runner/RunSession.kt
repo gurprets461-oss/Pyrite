@@ -42,6 +42,8 @@ class RunSession(
     context: Context,
     private val request: RunRequest,
     private val listener: Listener,
+    /** The service (and so the process) to run in. */
+    val serviceClass: Class<out PythonService> = PythonService::class.java,
 ) {
     interface Listener {
         fun onStarted() {}
@@ -72,7 +74,7 @@ class RunSession(
     fun start() = onMain {
         check(!started) { "already started" }
         started = true
-        val ok = app.bindService(Intent(app, PythonService::class.java), connection, Context.BIND_AUTO_CREATE)
+        val ok = app.bindService(Intent(app, serviceClass), connection, Context.BIND_AUTO_CREATE)
         bound = ok
         if (!ok) {
             dead = true
@@ -111,9 +113,16 @@ class RunSession(
         main.postDelayed({ if (!dead) stop() }, INTERRUPT_GRACE_MS)
     }
 
-    /** Kills the process. */
+    /** Kills the process (or, if it never started, just reports [RunResult.Stopped]). */
     fun stop() = onMain {
-        if (dead) return@onMain
+        if (dead || isFinished) return@onMain
+        if (!started) {
+            started = true
+            dead = true
+            openStreams = 0
+            finish(RunResult.Stopped)
+            return@onMain
+        }
         stopRequested = true
         if (pid != 0) Process.killProcess(pid)
         // Not connected yet: kill as soon as we know the pid (see onServiceConnected).
