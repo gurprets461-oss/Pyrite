@@ -13,10 +13,13 @@ if [ $status -ne 0 ]; then
     adb logcat -d -v time 2>/dev/null \
         | grep -E 'pyrite|PythonService|PythonThread|PythonInstaller|RunSession|TestRunner|AndroidRuntime|DEBUG|libc|faulthandler' \
         | grep -v -E 'Blockstore|Icing|AppInfoHelper|ProximityAuth|AiAiEcho' \
-        | tail -n 250
+        | tail -n 250 | tee logcat-tail.txt
     echo "Build/test errors:"
-    grep -E '^e: |error:|What went wrong|FAILED' -A4 instrumented.log | head -100 || true
+    grep -E '^e: |error:|What went wrong|FAILED' -A4 instrumented.log | head -100 | tee test-errors.txt || true
+    { echo "--- logcat"; cat logcat-tail.txt 2>/dev/null; } >> test-errors.txt
 fi
 echo "Instrumented test results:"
 python3 "$(dirname "$0")/junit-summary.py" app/build/outputs/androidTest-results/connected 2>&1 | tee test-summary.txt || true
+# Exploratory results some tests log (e.g. which Android wheels work).
+adb logcat -d -s PyriteWheels:I 2>/dev/null | grep PyriteWheels | tee -a test-summary.txt || true
 exit $status

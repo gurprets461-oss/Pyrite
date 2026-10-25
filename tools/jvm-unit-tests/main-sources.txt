@@ -6,3 +6,5 @@ dev/gurpret/pyrite/console/Ansi.kt
 dev/gurpret/pyrite/console/ConsoleBuffer.kt
 dev/gurpret/pyrite/console/CommandHistory.kt
 dev/gurpret/pyrite/files/ProjectStore.kt
+dev/gurpret/pyrite/files/FileOps.kt
+dev/gurpret/pyrite/packages/SitePackages.kt

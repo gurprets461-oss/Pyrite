@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- pip, and user programs that use the network. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -28,6 +31,10 @@
             android:name=".runner.ReplService"
             android:exported="false"
             android:process=":repl" />
+        <service
+            android:name=".runner.PipService"
+            android:exported="false"
+            android:process=":pip" />
     </application>
 
 </manifest>

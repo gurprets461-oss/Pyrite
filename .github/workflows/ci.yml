@@ -47,7 +47,14 @@ jobs:
       - name: Summarize build errors
         if: failure()
         run: |
-          grep -E '^e: |error:|What went wrong|FAILED|Test.*>.*FAILED' -A4 build.log | head -150 || true
+          grep -E '^e: |error:|What went wrong|FAILED|Test.*>.*FAILED' -A4 build.log | head -150 | tee build-errors.txt || true
+
+      - name: Upload build errors
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: build-errors
+          path: build-errors.txt
 
       - name: Upload APK
         uses: actions/upload-artifact@v7
@@ -110,9 +117,15 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: scripts/ci-instrumented.sh
 
-      - name: Test summary
+      - name: Upload test summary
         if: always()
-        run: cat test-summary.txt 2>/dev/null || echo "no test summary"
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-summary
+          path: |
+            test-summary.txt
+            test-errors.txt
+          if-no-files-found: ignore
 
       - name: Upload instrumented test reports
         if: always()
@@ -122,3 +135,23 @@ jobs:
           path: |
             app/build/reports/androidTests
             app/build/outputs/androidTest-results
+
+  # A short log to read results from: test summary and build errors only.
+  report:
+    name: Report
+    needs: [build, instrumented]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          pattern: '{test-summary,build-errors}'
+          merge-multiple: true
+      - name: Results
+        run: |
+          echo "build: ${{ needs.build.result }}  instrumented: ${{ needs.instrumented.result }}"
+          for f in build-errors.txt test-errors.txt test-summary.txt; do
+            [ -f "$f" ] && { echo "=== $f"; cat "$f"; }
+          done
+          true

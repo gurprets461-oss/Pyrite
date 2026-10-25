@@ -35,6 +35,9 @@ class ConsoleBuffer(private val maxLines: Int = 10_000, private val maxLineLengt
 
     fun snapshot(): List<ConsoleLine> = (0 until size).map { get(it) }
 
+    /** Text of the current, unterminated line (e.g. a prompt waiting for input). */
+    val currentLineText: String get() = current.joinToString("") { it.text }
+
     fun plainText(): String = buildString {
         lines.forEach { append(it.text).append('\n') }
         current.forEach { append(it.text) }

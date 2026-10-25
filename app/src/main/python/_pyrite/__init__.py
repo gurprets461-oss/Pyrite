@@ -4,9 +4,14 @@ import os
 import site
 import sys
 
+# Where pip installs packages; set by bootstrap().
+SITE_PACKAGES = None
+
 
 def bootstrap(site_packages):
     """Runs once, right after the interpreter starts."""
+    global SITE_PACKAGES
+    SITE_PACKAGES = site_packages
     # pip installs here (outside the extracted stdlib, so app updates don't wipe it).
     # addsitedir also processes .pth files, which some packages rely on.
     os.makedirs(site_packages, exist_ok=True)

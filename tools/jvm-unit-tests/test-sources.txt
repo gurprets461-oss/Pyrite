@@ -6,3 +6,5 @@ dev/gurpret/pyrite/console/AnsiParserTest.kt
 dev/gurpret/pyrite/console/ConsoleBufferTest.kt
 dev/gurpret/pyrite/console/CommandHistoryTest.kt
 dev/gurpret/pyrite/files/ProjectStoreTest.kt
+dev/gurpret/pyrite/files/FileOpsTest.kt
+dev/gurpret/pyrite/packages/SitePackagesTest.kt

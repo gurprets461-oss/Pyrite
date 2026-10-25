@@ -1,0 +1,58 @@
+"""pip inside the app.
+
+Android can't exec a `python` binary, so pip runs in-process. It comes from the wheel
+CPython bundles for ensurepip, unpacked into the user site-packages folder the first
+time it's needed. Installs go there too (`--target`), since the stdlib folder is
+replaced whenever the app updates.
+"""
+
+import glob
+import importlib
+import importlib.util
+import os
+
+import _pyrite
+
+_TARGET_OPTIONS = ("-t", "--target", "--user", "--prefix", "--root")
+
+
+def ensure_pip():
+    """Unpacks the bundled pip wheel into site-packages if pip isn't importable yet."""
+    if importlib.util.find_spec("pip") is not None:
+        return
+    import ensurepip
+    import zipfile
+
+    bundled = os.path.join(os.path.dirname(ensurepip.__file__), "_bundled")
+    wheels = sorted(glob.glob(os.path.join(bundled, "pip-*.whl")))
+    if not wheels:
+        raise RuntimeError(f"no bundled pip wheel in {bundled}")
+    with zipfile.ZipFile(wheels[-1]) as z:
+        z.extractall(_pyrite.SITE_PACKAGES)
+    importlib.invalidate_caches()
+
+
+def prepare_args(args):
+    """Points `pip install` at our site-packages unless the user chose a location."""
+    args = list(args)
+    if args and args[0] == "uninstall" and "-y" not in args and "--yes" not in args:
+        args.insert(1, "-y")  # there's no terminal to answer pip's prompt
+    if args and args[0] == "install" and not any(
+        a == opt or a.startswith(opt + "=") for a in args for opt in _TARGET_OPTIONS
+    ):
+        # --upgrade: with --target, pip only replaces existing folders when asked to.
+        args[1:1] = ["--target", _pyrite.SITE_PACKAGES, "--upgrade"]
+    return args
+
+
+def main(args):
+    """Runs pip with the given argument list; returns its exit status."""
+    ensure_pip()
+    from pip._internal.cli.main import main as pip_main
+
+    try:
+        status = pip_main(prepare_args(args))
+    finally:
+        # Make freshly installed packages importable in this interpreter.
+        importlib.invalidate_caches()
+    return status

@@ -23,6 +23,13 @@ object Interpreter {
         Os.setenv("TMPDIR", context.cacheDir.path, true)
         Os.setenv("HOME", context.filesDir.path, true)
         Os.setenv("LANG", "C.UTF-8", true)
+        // OpenSSL can't read Android's CA store layout, so give it a PEM bundle.
+        CaBundle.ensure(context)?.let { Os.setenv("SSL_CERT_FILE", it.path, true) }
+        // pip: no version nag, a persistent wheel cache, no interactive prompts.
+        Os.setenv("PIP_DISABLE_PIP_VERSION_CHECK", "1", true)
+        Os.setenv("PIP_CACHE_DIR", File(context.cacheDir, "pip").path, true)
+        Os.setenv("PIP_NO_INPUT", "1", true)
+        Os.setenv("PIP_ROOT_USER_ACTION", "ignore", true)
 
         NativeBridge.initialize(
             installer.home.path,
@@ -52,6 +59,10 @@ object Interpreter {
 
     /** An interactive console on stdin/stdout, until EOF or exit(). */
     fun runRepl(): Int = runString("import _pyrite.repl; _pyrite.repl.main()", "<pyrite-repl>")
+
+    /** `pip <args>` (see _pyrite/pip.py). Returns pip's exit status. */
+    fun runPip(args: List<String>): Int =
+        runString("import _pyrite.pip as _p\nraise SystemExit(_p.main(${PyLiteral.list(args)}))", "<pip>")
 
     /**
      * Shuts the interpreter down the way `python` does on exit. The process can't

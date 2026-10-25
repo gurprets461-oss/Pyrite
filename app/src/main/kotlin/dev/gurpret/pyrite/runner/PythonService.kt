@@ -67,6 +67,7 @@ open class PythonService : Service() {
                 is RunRequest.Code -> Interpreter.runString(request.code)
                 is RunRequest.Script -> Interpreter.runFile(request.path, request.args)
                 RunRequest.Repl -> Interpreter.runRepl()
+                is RunRequest.Pip -> Interpreter.runPip(request.args)
             }
             // Like interpreter exit: join non-daemon threads, run atexit handlers, flush.
             Interpreter.shutdown(status)

@@ -13,6 +13,9 @@ sealed interface RunRequest {
     /** An interactive console (code.InteractiveConsole). */
     data object Repl : RunRequest
 
+    /** `pip <args>`, run in its own process (pip can't share an interpreter with user code). */
+    data class Pip(val args: List<String>) : RunRequest
+
     fun toBundle(): Bundle = Bundle().apply {
         when (val r = this@RunRequest) {
             is Code -> {
@@ -25,6 +28,10 @@ sealed interface RunRequest {
                 putStringArray(ARGS, r.args.toTypedArray())
             }
             Repl -> putString(KIND, "repl")
+            is Pip -> {
+                putString(KIND, "pip")
+                putStringArray(ARGS, r.args.toTypedArray())
+            }
         }
     }
 
@@ -38,6 +45,7 @@ sealed interface RunRequest {
             "code" -> Code(b.getString(CODE)!!)
             "script" -> Script(b.getString(PATH)!!, b.getStringArray(ARGS)?.toList().orEmpty())
             "repl" -> Repl
+            "pip" -> Pip(b.getStringArray(ARGS)?.toList().orEmpty())
             else -> throw IllegalArgumentException("unknown run kind $kind")
         }
     }
