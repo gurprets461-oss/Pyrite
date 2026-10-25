@@ -36,15 +36,15 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** on emulator/device: type an indented script using the keys row, run it, see output; kill and reopen the app and the file is still there.
 
 ## M5 — Files & projects
-- [ ] File browser for `filesDir/projects`: new / rename / delete file and folder
-- [ ] Runs use the script's folder as cwd and `sys.path[0]`; imports between sibling files work
-- [ ] Import/export via Storage Access Framework
+- [x] File browser for `filesDir/projects`: new / rename / delete file and folder
+- [x] Runs use the script's folder as cwd and `sys.path[0]`; imports between sibling files work
+- [x] Import/export via Storage Access Framework
 **Done when:** a project with `main.py` importing `helpers.py` runs; a file written with `open("out.txt", "w")` shows up in the browser.
 
 ## M6 — pip
-- [ ] pip available in-app (ensurepip or bundled wheel), installing to `filesDir/site-packages`
-- [ ] Packages screen (install / uninstall / list); `pip` also usable from the console
-- [ ] Pure-Python packages work. Then try binary wheels with Android tags from PyPI and record which work in NOTES.md
+- [x] pip available in-app (ensurepip or bundled wheel), installing to `filesDir/site-packages`
+- [x] Packages screen (install / uninstall / list); `pip` also usable from the console
+- [x] Pure-Python packages work. Then try binary wheels with Android tags from PyPI and record which work in NOTES.md
 **Done when:** `pip install requests rich` succeeds and `requests.get("https://example.com").status_code == 200`.
 
 ## M7 — Pydroid-feel polish

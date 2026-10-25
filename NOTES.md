@@ -10,7 +10,11 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - M4 done: `EditorTest` types `for i in range(3):` + Enter (auto-indent) + `print(i * 2)` via
   key events and the keys row, runs it, sees 0/2/4; a second test in a fresh process
   (test orchestrator) finds the file restored.
-- Current: M5 (Files) + M6 (pip) in CI; M7 (jedi completions, syntax underline) in progress.
+- M5 done: `FilesTest` builds proj/{helpers,main}.py through the Files UI, runs it
+  (sibling import, cwd == sys.path[0]), sees out.txt in the browser, renames + deletes it.
+- M6 done: `PackagesTest` installs `requests rich` from the Packages tab, then
+  `requests.get("https://example.com")` -> 200; `pip list` from the REPL; Android wheels.
+- Current: **M7** (jedi completions, syntax underline, settings/examples/recent/session).
 
 ## pip / Android wheels (M6)
 - pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into
@@ -137,4 +141,7 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   system; `RunSession` unbinds as soon as the death recipient fires.
 
 ## Open problems
-- (none yet)
+- SAF import/export (Files tab) is implemented but not covered by automated tests: it
+  needs the system file picker. Verify by hand on a device.
+- pip `--target` reinstalls dependencies on each install (pip ignores already-installed
+  packages in target mode); cached wheels make it cheap, but it's not "already satisfied".
