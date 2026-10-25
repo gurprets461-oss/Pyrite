@@ -139,6 +139,12 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   we set a (never executed) executable path to keep them on fds 1/2.
 - A process that dies while still bound with BIND_AUTO_CREATE gets restarted by the
   system; `RunSession` unbinds as soon as the death recipient fires.
+- Android may hand a new binding a cached `:py`/`:repl`/`:analysis` process whose Python
+  already ran (e.g. after the UI process died). `IPythonService.isFresh()` exposes a
+  per-process flag; `RunSession` kills a stale process and binds again.
+- jedi picks a "same environment" when sys.executable's basename starts with "python",
+  then tries to spawn it. Always pass `environment=jedi.InterpreterEnvironment()`.
+- Input written to a `RunSession` before the service connects is queued, not dropped.
 
 ## Open problems
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
