@@ -51,6 +51,25 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
   time; next run waits for the previous process to die).
 - M1's `InProcessPython` (Python in the calling process, marker-synced output) remains for
   `InterpreterTest` only.
+- Processes: `:py` (script runs, one per run), `:repl` (REPL), `:pip` (pip), `:analysis`
+  (jedi + syntax checks, long-lived). All are `PythonService` subclasses; `Runner` keeps
+  one session per process slot (`Runner.serviceFor`).
+- `console/`: `AnsiParser` + `ConsoleBuffer` (pure Kotlin, 10k-line cap, `\r` redraw,
+  tabs), `ConsoleState` (Compose state + `CommandHistory`), `ConsoleView` (LazyColumn).
+- `editor/`: `EditorController` owns the sora `CodeEditor` view (kept across tab switches;
+  the activity handles config changes), keys row, find/replace via `EditorSearcher`.
+  `PythonLanguage` = TextMate language + jedi completions (`AnalysisClient`, JSON lines
+  to `_pyrite/analysis.py`). Syntax check = `compile()` in `:analysis` after a 600 ms
+  pause -> `DiagnosticRegion`s via a registered `DiagnosticProvider`.
+- `files/`: `ProjectStore` (atomic writes), `FileOps` (browser ops confined to
+  `filesDir/projects`), `FileTransfer` (SAF import/export), `FilesScreen`.
+- `packages/`: `SitePackages` (reads `*.dist-info/METADATA`), `PipCommand` (REPL pip line
+  parsing), `PackagesScreen`/`PackagesController`.
+- `settings/`: `Settings` (SharedPreferences "pyrite": font size, theme, completion,
+  last file/tab/cursor, recent files), `SettingsDialog`.
+- jedi 0.20.1 + parso 0.8.7 wheels are fetched (pinned sha256) by `fetch-python.sh` into
+  `cross-build/wheels` and unpacked into the bundled site-packages by `PackPythonStdlib`
+  (django-stubs dropped). parso clamps to its 3.14 grammar, which parses 3.15 fine.
 
 ## Build & test
 
@@ -71,7 +90,9 @@ scripts/setup-sdk.sh --with-emulator
 
 CI (`.github/workflows/ci.yml`) runs build + unit tests, then instrumented tests on an
 API 35 x86_64 emulator (GitHub runners have KVM) via `scripts/ci-instrumented.sh`, which
-prints one PASS/FAIL line per test plus filtered logcat. `fresh-setup.yml` re-checks the M0
+prints one PASS/FAIL line per test plus filtered logcat. The last job, **Report**, prints
+just the build errors / test summary / logcat tail: read that job's log first.
+Instrumented tests use the AndroidX test orchestrator (one process per test). `fresh-setup.yml` re-checks the M0
 acceptance command against an empty SDK directory whenever `scripts/` changes.
 
 Without the Android SDK (e.g. the Claude sandbox), Android-free logic + tests still run:
@@ -103,6 +124,8 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
   builds (instrumented tests still need CI: no KVM).
 - Reading CI from the sandbox: GitHub MCP `actions_list` / `get_job_logs` (logs only exist
   once a job completes; the run status can lag, so don't mistake a slow status for a hang).
+  Read the **Report** job's log (short). Large logs get saved to a local file you can grep.
+- In `build.gradle.kts`, `java.` resolves to Gradle's `java` extension: import JDK classes.
 - Maven Central sometimes answers 429; `repo1.maven.org` + retry works.
 
 ## Gotchas found so far
