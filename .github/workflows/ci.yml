@@ -2,7 +2,8 @@ name: CI
 
 on:
   push:
-    paths-ignore: ['**.md']
+    # Docs and the wheel-building workflow don't affect the app.
+    paths-ignore: ['**.md', 'wheels/**', '.github/workflows/wheels.yml', '.github/workflows/probe.yml']
   pull_request:
   workflow_dispatch:
 
