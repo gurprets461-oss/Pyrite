@@ -78,7 +78,12 @@ class PolishTest {
             vm.editor.view!!.requestFocus()
             vm.editor.setCursor(1, 0)
         }
-        instrumentation.sendStringSync("os.path.")
+        // Type at human speed: sora skips completion requests that come within 70 ms of
+        // the previous one (fast typing / pasting), and sendStringSync is near-instant.
+        for (c in "os.path.") {
+            instrumentation.sendStringSync(c.toString())
+            Thread.sleep(200)
+        }
         waitFor("the completion window", 30) {
             onMain { vm.editor.view!!.getComponent(EditorAutoCompletion::class.java).isShowing }
         }
