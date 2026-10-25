@@ -18,7 +18,11 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
   (jedi via `InterpreterEnvironment` in `:analysis`); `def broken(:` gets an error
   underline + SyntaxError bar with nothing run, cleared once fixed; dark theme from
   settings, example opened, back to main.py via Recent, all persisted.
-- All milestones (M0–M7) done. CI run 40209763735: 30 instrumented tests, 0 failed.
+- M0–M7 done (CI run 40209763735: 30 instrumented tests, 0 failed).
+- pip now uses the user scheme (`--user`, PYTHONUSERBASE in filesDir) instead of
+  `--target`; `PackagesTest.d_installingTwiceInstallsNothing` (CI run 40211098571).
+- Current: **M8** (Android wheels for numpy/Pillow/matplotlib, index on GitHub Pages,
+  plt.show() images). See "Scientific wheels (M8)".
 
 ## pip / Android wheels (M6)
 - pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into the user
@@ -44,6 +48,52 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
   | charset-normalizer 3.5.2 | no cp315 android wheel; pure-Python wheel used |
 - No Android wheels on PyPI yet (checked 2026-10-25): numpy, pillow, cryptography,
   pydantic-core, regex, lxml, pyyaml, msgpack, cffi, orjson, psutil, pandas, scipy.
+
+## Scientific wheels (M8)
+- beeware.org/mobile-wheels (its data: `results.json` on the beeware/mobile-wheels
+  gh-pages branch, updated 2026-10-25): no Android wheels on PyPI for numpy, pillow,
+  matplotlib, contourpy or kiwisolver; fonttools is pure Python. 17 of the top 360
+  binary packages have Android wheels. So all five are built here.
+- `.github/workflows/wheels.yml` (runs on pushes to `wheels/**`): one job per package
+  and ABI, `wheels/build.sh <pkg> <arm64_v8a|x86_64>` = cibuildwheel 4.3.4 on the PyPI
+  sdist, target `cp315-android_*` (Python 3.15.0, ABI-compatible with the app's 3.15.1),
+  versions in `wheels/versions.txt`. Each takes 2-6 min on ubuntu-24.04.
+  - numpy: `-Dblas=none -Dlapack=none`; `wheels/android-longdouble.cross` sets
+    `longdouble_format = 'IEEE_QUAD_LE'` (128-bit quad on Android arm64 *and* x86_64),
+    because numpy's probe runs a test program, which can't run when cross-compiling.
+  - contourpy: its link line had a bare `-Wl,-rpath,` followed by libpython's path, so
+    libpython wasn't linked and Android's `-Wl,--no-undefined` failed on every Py*
+    symbol. `wheels/contourpy-before-build.sh` adds `link_args: ['-lpython3.15']`.
+  - Pillow: upstream has no Android dependency build. `wheels/pillow-deps.sh` builds
+    static libjpeg-turbo, freetype and libwebp (libwebp needs `-DANDROID_NDK` for the
+    NDK's cpufeatures; sharpyuv and cpufeatures are folded into libwebp.a because
+    Pillow only links webp/webpmux/webpdemux) and uses the NDK's libz.so (allowed by
+    auditwheel). raqm/imagequant off, no tiff/lcms2/openjpeg/avif yet.
+  - kiwisolver, matplotlib: as-is (matplotlib builds FreeType, Qhull, HarfBuzz and
+    libraqm as meson subprojects). C++ wheels bundle a renamed libc++_shared.
+- The publish job merges new wheels with the ones on gh-pages, writes a PEP 503 index
+  (`wheels/make_index.py`) and force-pushes a one-commit `gh-pages` branch:
+  https://gurprets461-oss.github.io/Pyrite/simple/. GitHub Pages has to be switched on
+  once by the repo owner (Settings > Pages > Deploy from a branch > gh-pages, / root):
+  the workflow token gets 403 from the Pages API and pushing gh-pages doesn't enable it.
+  While Pages is off, CI serves a copy of gh-pages from the runner
+  (`scripts/wheel-index-standin.sh`) and logs a warning.
+- App side: `pip.conf` is packed into the stdlib zip root, i.e. `sys.prefix/pip.conf`,
+  pip's "site" config: `extra-index-url = <index>` and `prefer-binary = true` (Android
+  can't build sdists). The URL comes from Gradle (`-Ppyrite.wheelIndex=...` overrides)
+  and is `BuildConfig.WHEEL_INDEX_URL`.
+- plt.show(): `MPLBACKEND=module://_pyrite.mpl_backend`. Its `show()` saves each figure
+  as PNG (150 dpi: 960x720 by default) in `cacheDir/console-images` and writes
+  `ESC ] pyrite-image ; <path> BEL` to stdout (`_pyrite.show_image`). `AnsiParser` hands
+  OSC payloads to `ConsoleBuffer`, which adds an image line; `ConsoleView` decodes it
+  off the main thread. Shown figures are closed (like a notebook). Old images are
+  deleted when the app's ViewModel starts.
+- arm64 device: GitHub's `ubuntu-24.04-arm` runner has no /dev/kvm and Google ships no
+  linux-aarch64 emulator. redroid (`redroid/redroid:14.0.0-latest`, Android 14 / API 34
+  arm64-v8a in Docker) works there after `apt install linux-modules-extra-$(uname -r)`
+  and `modprobe binder_linux`; it boots in ~10 s. CI job `arm64` installs the APKs and
+  runs `ScienceTest` with `am instrument` (`scripts/redroid-start.sh`,
+  `scripts/device-tests.sh`), and keeps a screenshot of the plot.
 
 ## Architecture (so far)
 - `app/src/main/cpp/pyrite.c`: JNI bridge. `redirectStdio` (dup2 onto 0/1/2), `initialize`
