@@ -61,6 +61,8 @@ class RunSession(
     private var binder: IBinder? = null
     private var pid = 0
     private var stdin: OutputStream? = null
+    private val pendingInput = mutableListOf<String>()
+    private var stdinClosed = false
     private var exitStatus: Int? = null
     private var stopRequested = false
     private var started = false
@@ -83,9 +85,14 @@ class RunSession(
         }
     }
 
-    /** Writes to the program's stdin. */
+    /** Writes to the program's stdin (queued until the process is connected). */
     fun sendInput(text: String) = onMain {
-        val out = stdin ?: return@onMain
+        if (dead) return@onMain
+        val out = stdin
+        if (out == null) {
+            if (!stdinClosed) pendingInput += text
+            return@onMain
+        }
         inputWriter.execute {
             try {
                 out.write(text.toByteArray(Charsets.UTF_8))
@@ -98,6 +105,7 @@ class RunSession(
 
     /** Closes stdin (Ctrl+D): input() raises EOFError. */
     fun closeInput() = onMain {
+        stdinClosed = true
         val out = stdin ?: return@onMain
         stdin = null
         inputWriter.execute { runCatching { out.close() } }
@@ -161,6 +169,12 @@ class RunSession(
             val outPipe = ParcelFileDescriptor.createPipe()
             val errPipe = ParcelFileDescriptor.createPipe()
             stdin = ParcelFileDescriptor.AutoCloseOutputStream(inPipe[1])
+            pendingInput.forEach { sendInput(it) }
+            pendingInput.clear()
+            if (stdinClosed) {
+                stdinClosed = false
+                closeInput()
+            }
             startReader(outPipe[0], StreamKind.STDOUT)
             startReader(errPipe[0], StreamKind.STDERR)
             try {
