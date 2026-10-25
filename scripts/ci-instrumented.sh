@@ -11,7 +11,7 @@ status=${PIPESTATUS[0]}
 if [ $status -ne 0 ]; then
     echo "logcat (Pyrite-related, last 250 lines):"
     adb logcat -d -v time 2>/dev/null \
-        | grep -E 'pyrite|PythonService|PythonThread|PythonInstaller|RunSession|TestRunner|AndroidRuntime|DEBUG|libc|faulthandler' \
+        | grep -E 'pyrite|PythonService|PythonThread|PythonInstaller|RunSession|AnalysisClient|TestRunner|AndroidRuntime|DEBUG|libc|faulthandler' \
         | grep -v -E 'Blockstore|Icing|AppInfoHelper|ProximityAuth|AiAiEcho' \
         | tail -n 250 | tee logcat-tail.txt
     echo "Build/test errors:"

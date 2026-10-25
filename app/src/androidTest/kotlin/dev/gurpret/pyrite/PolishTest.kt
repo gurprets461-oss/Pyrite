@@ -115,11 +115,11 @@ class PolishTest {
         compose.onNodeWithTag("settings-done").performClick()
 
         // Open a bundled example, then go back to main.py through the recent list.
-        compose.onNodeWithTag("open-menu").performClick()
+        compose.onNodeWithTag("open-menu").performScrollTo().performClick()
         compose.onNodeWithTag("example-fibonacci.py").performClick()
         compose.waitUntilAtLeastOneExists(hasText("examples/fibonacci.py"), 5_000)
         assertTrue(onMain { vm.editor.text }.contains("def fib_loop"))
-        compose.onNodeWithTag("open-menu").performClick()
+        compose.onNodeWithTag("open-menu").performScrollTo().performClick()
         compose.onNodeWithTag("recent-main.py").performClick()
         compose.waitUntilAtLeastOneExists(hasText("main.py"), 5_000)
         assertEquals("main.py", onMain { vm.currentFile.name })

@@ -37,6 +37,20 @@ def check(source, path="<editor>"):
         return [{"line": 1, "col": 1, "end_line": 1, "end_col": 2, "msg": str(e)}]
 
 
+_environment = None
+
+
+def _env():
+    """jedi must analyze in-process: on Android there's no python executable to spawn
+    (sys.executable is a placeholder), and jedi would otherwise try to run it."""
+    global _environment
+    if _environment is None:
+        import jedi
+
+        _environment = jedi.InterpreterEnvironment()
+    return _environment
+
+
 def _script(req):
     import jedi
 
@@ -44,7 +58,7 @@ def _script(req):
     project = None
     if path:
         project = jedi.Project(os.path.dirname(path), added_sys_path=[os.path.dirname(path)])
-    return jedi.Script(req["source"], path=path, project=project)
+    return jedi.Script(req["source"], path=path, project=project, environment=_env())
 
 
 def complete(req):
@@ -79,7 +93,7 @@ def _warm_up():
     try:
         import jedi
 
-        jedi.Script("import os\nos.path.").complete(2, 8)
+        jedi.Script("import os\nos.path.", environment=_env()).complete(2, 8)
     except Exception:
         pass
 
