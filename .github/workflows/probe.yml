@@ -9,20 +9,15 @@ jobs:
     steps:
       - name: versions
         run: |
-          m() { curl -sSL "https://dl.google.com/dl/android/maven2/$1/maven-metadata.xml" | grep -o '<version>[^<]*</version>' | sed 's/<[^>]*>//g' | grep -v -E 'alpha|beta|rc|dev' | tail -4 | tr '\n' ' '; echo " <- $1"; }
+          m() { curl -sSL "https://dl.google.com/dl/android/maven2/$1/maven-metadata.xml" | grep -o '<version>[^<]*</version>' | sed 's/<[^>]*>//g' | grep -v -E 'alpha|beta|rc|dev' | tail -3 | tr '\n' ' '; echo " <- $1"; }
           for p in com/android/tools/build/gradle androidx/compose/compose-bom androidx/activity/activity-compose androidx/core/core-ktx \
             androidx/lifecycle/lifecycle-runtime-ktx androidx/lifecycle/lifecycle-viewmodel-compose androidx/navigation/navigation-compose \
             androidx/test/runner androidx/test/ext/junit androidx/test/core androidx/test/rules androidx/test/espresso/espresso-core \
             androidx/test/uiautomator/uiautomator androidx/test/orchestrator androidx/test/services/test-services androidx/documentfile/documentfile \
             androidx/compose/material/material-icons-extended com/android/tools/build/aapt2; do m $p; done
-      - name: sdk
-        run: |
-          echo "ANDROID_HOME=$ANDROID_HOME"; ls $ANDROID_HOME; ls $ANDROID_HOME/platforms $ANDROID_HOME/build-tools $ANDROID_HOME/ndk $ANDROID_HOME/cmdline-tools
-          ls -l /dev/kvm || true; nproc; free -g
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --list 2>/dev/null | grep -E '^ +(platforms;|build-tools;|ndk;|cmake;|system-images;android-3[4-9];(google_apis|default);x86_64|cmdline-tools;)' | sort -u | tail -80
       - name: python
         run: |
-          curl -sSL https://www.python.org/downloads/android/ | grep -o 'https://www.python.org/ftp/python/[^"]*android[^"]*' | sort -u | head -20
-          for v in 3.15.0 3.14.8; do curl -sSL https://www.python.org/ftp/python/$v/ | grep -o 'python-[^"]*android[^"<]*' | sort -u; done
-          for v in 3.15.0; do for a in aarch64 x86_64; do f=python-$v-$a-linux-android.tar.gz; curl -sSfLO https://www.python.org/ftp/python/$v/$f && sha256sum $f && tar tzf $f | head -40 && tar tzf $f | grep -c . ; done; done
-          curl -sSL "https://www.python.org/api/v2/downloads/release/?is_published=true" | python3 -c "import json,sys; r=[x for x in json.load(sys.stdin) if x['name'].startswith('Python 3.1')]; r.sort(key=lambda x:x['release_date']); [print(x['name'],x['release_date'],x['resource_uri']) for x in r[-6:]]"
+          curl -sSL "https://www.python.org/api/v2/downloads/release_file/?release=1165" | python3 -c "import json,sys; [print({k:v for k,v in x.items() if k in ('name','url','sha256_sum','md5_sum','filesize')}) for x in json.load(sys.stdin) if 'ndroid' in x['url']]"
+          for a in aarch64 x86_64; do f=python-3.15.1-$a-linux-android.tar.gz; curl -sSfLO https://www.python.org/ftp/python/3.15.1/$f && sha256sum $f && stat -c %s $f; done
+          tar tzf python-3.15.1-x86_64-linux-android.tar.gz | grep -v -E 'prefix/(include|lib/python3.15)/' | head -80
+          tar tzf python-3.15.1-x86_64-linux-android.tar.gz | grep -E 'prefix/lib/python3.15/[^/]+/?$' | head -300 | tr '\n' ' '
