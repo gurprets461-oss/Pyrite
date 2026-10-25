@@ -8,11 +8,18 @@ Protocol: one JSON object per line on stdin, one JSON reply per line on stdout.
   {"id": 3, "type": "signature", "source": "...", "line": 3, "col": 8, "path": "..."}
       -> {"id": 3, "signatures": [{"name", "params": [...], "index"}]}
 Errors come back as {"id": n, "error": "..."}.
+
+Requests are answered in order, but a "check", "complete" or "signature" request that
+already has a newer one of the same type waiting behind it is answered with
+{"id": n, "superseded": true} without running: while typing, the editor sends one
+completion request per keystroke and only wants the last answer.
 """
 
 import ast
+import io
 import json
 import os
+import select
 import sys
 import warnings
 
@@ -98,6 +105,52 @@ def _warm_up():
         pass
 
 
+# Request types where only the newest pending request matters.
+_LATEST_ONLY = {"check", "complete", "signature"}
+
+
+class _Batches:
+    """Reads request lines from a pipe: waits for at least one, then takes all that are
+    already available, so stale requests can be skipped."""
+
+    def __init__(self, stream):
+        self.fd = stream.fileno()
+        self.buf = b""
+        self.eof = False
+
+    def _read(self, wait):
+        if not wait and not select.select([self.fd], [], [], 0)[0]:
+            return False
+        data = os.read(self.fd, 1 << 16)
+        if not data:
+            self.eof = True
+            return False
+        self.buf += data
+        return True
+
+    def __iter__(self):
+        while True:
+            while b"\n" not in self.buf and not self.eof:
+                self._read(wait=True)
+            while self._read(wait=False):
+                pass
+            *lines, self.buf = self.buf.split(b"\n")
+            if self.eof and self.buf.strip():
+                lines.append(self.buf)
+                self.buf = b""
+            if lines:
+                yield [line.decode("utf-8", "replace") for line in lines]
+            if self.eof:
+                return
+
+
+def _batches(stdin):
+    try:
+        return iter(_Batches(stdin))
+    except (AttributeError, OSError, io.UnsupportedOperation):  # not a real pipe (tests)
+        return ([line] for line in stdin)
+
+
 def serve(stdin=None, stdout=None):
     stdin = stdin or sys.stdin
     out = stdout or sys.stdout
@@ -106,17 +159,29 @@ def serve(stdin=None, stdout=None):
     warnings.simplefilter("ignore")
     # jedi isn't thread-safe: warm up here, while early requests wait in the pipe.
     _warm_up()
-    for line in stdin:
-        line = line.strip()
-        if not line:
-            continue
-        req_id = None
-        try:
-            req = json.loads(line)
-            req_id = req.get("id")
-            reply = handle(req)
-        except Exception as e:
-            reply = {"error": f"{type(e).__name__}: {e}"}
-        reply["id"] = req_id
-        out.write(json.dumps(reply) + "\n")
-        out.flush()
+    for batch in _batches(stdin):
+        requests = []
+        for line in batch:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                req = json.loads(line)
+                requests.append((req, None))
+            except Exception as e:
+                requests.append(({}, e))
+        newest = {req.get("type"): i for i, (req, _) in enumerate(requests)}
+        for i, (req, error) in enumerate(requests):
+            kind = req.get("type")
+            try:
+                if error is not None:
+                    raise error
+                if kind in _LATEST_ONLY and newest[kind] != i:
+                    reply = {"superseded": True}
+                else:
+                    reply = handle(req)
+            except Exception as e:
+                reply = {"error": f"{type(e).__name__}: {e}"}
+            reply["id"] = req.get("id")
+            out.write(json.dumps(reply) + "\n")
+            out.flush()

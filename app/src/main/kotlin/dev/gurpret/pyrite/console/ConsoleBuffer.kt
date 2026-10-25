@@ -5,8 +5,11 @@ enum class SpanKind { STDOUT, STDERR, INPUT, INFO }
 
 data class Span(val text: String, val sgr: Sgr, val kind: SpanKind)
 
-/** One console line. [id] is stable while the line is being appended to. */
-data class ConsoleLine(val id: Long, val spans: List<Span>) {
+/**
+ * One console line. [id] is stable while the line is being appended to. A line with
+ * an [image] (a file path) shows that picture instead of text.
+ */
+data class ConsoleLine(val id: Long, val spans: List<Span>, val image: String? = null) {
     val text: String get() = spans.joinToString("") { it.text }
     val length: Int get() = spans.sumOf { it.text.length }
 }
@@ -39,7 +42,7 @@ class ConsoleBuffer(private val maxLines: Int = 10_000, private val maxLineLengt
     val currentLineText: String get() = current.joinToString("") { it.text }
 
     fun plainText(): String = buildString {
-        lines.forEach { append(it.text).append('\n') }
+        lines.forEach { append(if (it.image != null) "[image]" else it.text).append('\n') }
         current.forEach { append(it.text) }
     }
 
@@ -57,7 +60,21 @@ class ConsoleBuffer(private val maxLines: Int = 10_000, private val maxLineLengt
                 pendingCarriageReturn = true
             }
             override fun backspace() = backspaceOne()
+            override fun osc(payload: String) {
+                if (payload.startsWith(IMAGE_OSC)) appendImage(payload.removePrefix(IMAGE_OSC))
+            }
         })
+        version++
+    }
+
+    /** An image (file path) on a line of its own, after the text so far. */
+    fun appendImage(path: String) {
+        if (current.isNotEmpty()) newLine()
+        pendingCarriageReturn = false
+        current = ArrayList()
+        lines.add(ConsoleLine(currentId, emptyList(), image = path))
+        currentId = nextId++
+        trim()
         version++
     }
 
@@ -140,8 +157,17 @@ class ConsoleBuffer(private val maxLines: Int = 10_000, private val maxLineLengt
         lines.add(ConsoleLine(currentId, current))
         current = ArrayList()
         currentId = nextId++
+        trim()
+    }
+
+    private fun trim() {
         if (lines.size > maxLines) {
             lines.subList(0, lines.size - maxLines).clear()
         }
+    }
+
+    companion object {
+        /** OSC payload prefix for "show this image file" (see `_pyrite.show_image`). */
+        const val IMAGE_OSC = "pyrite-image;"
     }
 }

@@ -44,8 +44,8 @@ object AnsiPalette {
 
 /**
  * Turns a terminal output stream into text runs plus line-control events. Handles
- * SGR colors/styles; other escape sequences (cursor movement, titles) are dropped.
- * Escapes split across [feed] calls are buffered.
+ * SGR colors/styles and passes OSC payloads on; other escape sequences (cursor
+ * movement) are dropped. Escapes split across [feed] calls are buffered.
  */
 class AnsiParser {
     interface Sink {
@@ -53,6 +53,9 @@ class AnsiParser {
         fun newline()
         fun carriageReturn()
         fun backspace()
+
+        /** An operating system command, `ESC ] payload BEL` (or `ESC ] payload ESC \`). */
+        fun osc(payload: String) {}
     }
 
     var sgr: Sgr = Sgr.DEFAULT
@@ -81,6 +84,9 @@ class AnsiParser {
                     if (s.getOrNull(i + 1) == '[' && s[end - 1] == 'm') {
                         flush()
                         applySgr(s.substring(i + 2, end - 1))
+                    } else if (s.getOrNull(i + 1) == ']') {
+                        flush()
+                        sink.osc(s.substring(i + 2, if (s[end - 1] == '\u0007') end - 1 else end - 2))
                     }
                     i = end
                     continue

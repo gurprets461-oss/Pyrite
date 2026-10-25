@@ -18,12 +18,27 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
   (jedi via `InterpreterEnvironment` in `:analysis`); `def broken(:` gets an error
   underline + SyntaxError bar with nothing run, cleared once fixed; dark theme from
   settings, example opened, back to main.py via Recent, all persisted.
-- All milestones (M0–M7) done. CI run 40209763735: 30 instrumented tests, 0 failed.
+- M0–M7 done (CI run 40209763735: 30 instrumented tests, 0 failed).
+- pip now uses the user scheme (`--user`, PYTHONUSERBASE in filesDir) instead of
+  `--target`; `PackagesTest.d_installingTwiceInstallsNothing` (CI run 40211098571).
+- M8 done: CI run 40224237930, with GitHub Pages serving
+  https://gurprets461-oss.github.io/Pyrite/simple/ (no stand-in): `ScienceTest` 4/4 on
+  redroid (Android 14 arm64-v8a) — pip took numpy/matplotlib/contourpy/kiwisolver/Pillow
+  arm64 wheels from that index, `numpy.arange(10).sum() == 45` from the aarch64 .so,
+  `plt.plot([1,2,3]); plt.show()` -> 960x720 image in the console — and 4/4 on the
+  x86_64 emulator. All milestones (M0–M8) done. See "Scientific wheels (M8)".
 
 ## pip / Android wheels (M6)
-- pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into
-  `filesDir/site-packages` on first use, run in-process in the `:pip` process with
-  `--target <site-packages> --upgrade` added to `install` (see `_pyrite/pip.py`).
+- pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into the user
+  site-packages on first use, run in-process in the `:pip` process with `--user`
+  added to `install` (see `_pyrite/pip.py`). `PYTHONUSERBASE=filesDir/python-user`
+  (set before `Py_Initialize`), so packages land in
+  `filesDir/python-user/lib/python3.15/site-packages`. The app creates that folder
+  before startup: site.py only adds the user site to sys.path if it exists, and then
+  puts it ahead of the bundled site-packages. pip sees installed packages there, so a
+  second `pip install requests` is all "Requirement already satisfied"
+  (`PackagesTest.d_installingTwiceInstallsNothing`). The old `--target` folder
+  `filesDir/site-packages` is moved into the user site on first start.
   Never run pip inside the REPL's interpreter: pip >= 26.3 rejects imports made after it
   starts. REPL `pip ...` lines are intercepted by `ReplController` and sent to `:pip`.
 - sdists can't build (no subprocess/compiler on Android): only wheels install.
@@ -38,6 +53,52 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - No Android wheels on PyPI yet (checked 2026-10-25): numpy, pillow, cryptography,
   pydantic-core, regex, lxml, pyyaml, msgpack, cffi, orjson, psutil, pandas, scipy.
 
+## Scientific wheels (M8)
+- beeware.org/mobile-wheels (its data: `results.json` on the beeware/mobile-wheels
+  gh-pages branch, updated 2026-10-25): no Android wheels on PyPI for numpy, pillow,
+  matplotlib, contourpy or kiwisolver; fonttools is pure Python. 17 of the top 360
+  binary packages have Android wheels. So all five are built here.
+- `.github/workflows/wheels.yml` (runs on pushes to `wheels/**`): one job per package
+  and ABI, `wheels/build.sh <pkg> <arm64_v8a|x86_64>` = cibuildwheel 4.3.4 on the PyPI
+  sdist, target `cp315-android_*` (Python 3.15.0, ABI-compatible with the app's 3.15.1),
+  versions in `wheels/versions.txt`. Each takes 2-6 min on ubuntu-24.04.
+  - numpy: `-Dblas=none -Dlapack=none`; `wheels/android-longdouble.cross` sets
+    `longdouble_format = 'IEEE_QUAD_LE'` (128-bit quad on Android arm64 *and* x86_64),
+    because numpy's probe runs a test program, which can't run when cross-compiling.
+  - contourpy: its link line had a bare `-Wl,-rpath,` followed by libpython's path, so
+    libpython wasn't linked and Android's `-Wl,--no-undefined` failed on every Py*
+    symbol. `wheels/contourpy-before-build.sh` adds `link_args: ['-lpython3.15']`.
+  - Pillow: upstream has no Android dependency build. `wheels/pillow-deps.sh` builds
+    static libjpeg-turbo, freetype and libwebp (libwebp needs `-DANDROID_NDK` for the
+    NDK's cpufeatures; sharpyuv and cpufeatures are folded into libwebp.a because
+    Pillow only links webp/webpmux/webpdemux) and uses the NDK's libz.so (allowed by
+    auditwheel). raqm/imagequant off, no tiff/lcms2/openjpeg/avif yet.
+  - kiwisolver, matplotlib: as-is (matplotlib builds FreeType, Qhull, HarfBuzz and
+    libraqm as meson subprojects). C++ wheels bundle a renamed libc++_shared.
+- The publish job merges new wheels with the ones on gh-pages, writes a PEP 503 index
+  (`wheels/make_index.py`) and force-pushes a one-commit `gh-pages` branch:
+  https://gurprets461-oss.github.io/Pyrite/simple/. GitHub Pages had to be switched on
+  once by the repo owner (Settings > Pages > Deploy from a branch > gh-pages, / root):
+  the workflow token gets 403 from the Pages API and pushing gh-pages doesn't enable it.
+  It's on since 2026-10-25. If the site ever stops answering, CI serves a copy of
+  gh-pages from the runner instead (`scripts/wheel-index-standin.sh`) and logs a warning.
+- App side: `pip.conf` is packed into the stdlib zip root, i.e. `sys.prefix/pip.conf`,
+  pip's "site" config: `extra-index-url = <index>` and `prefer-binary = true` (Android
+  can't build sdists). The URL comes from Gradle (`-Ppyrite.wheelIndex=...` overrides)
+  and is `BuildConfig.WHEEL_INDEX_URL`.
+- plt.show(): `MPLBACKEND=module://_pyrite.mpl_backend`. Its `show()` saves each figure
+  as PNG (150 dpi: 960x720 by default) in `cacheDir/console-images` and writes
+  `ESC ] pyrite-image ; <path> BEL` to stdout (`_pyrite.show_image`). `AnsiParser` hands
+  OSC payloads to `ConsoleBuffer`, which adds an image line; `ConsoleView` decodes it
+  off the main thread. Shown figures are closed (like a notebook). Old images are
+  deleted when the app's ViewModel starts.
+- arm64 device: GitHub's `ubuntu-24.04-arm` runner has no /dev/kvm and Google ships no
+  linux-aarch64 emulator. redroid (`redroid/redroid:14.0.0-latest`, Android 14 / API 34
+  arm64-v8a in Docker) works there after `apt install linux-modules-extra-$(uname -r)`
+  and `modprobe binder_linux`; it boots in ~10 s. CI job `arm64` installs the APKs and
+  runs `ScienceTest` with `am instrument` (`scripts/redroid-start.sh`,
+  `scripts/device-tests.sh`), and keeps a screenshot of the plot.
+
 ## Architecture (so far)
 - `app/src/main/cpp/pyrite.c`: JNI bridge. `redirectStdio` (dup2 onto 0/1/2), `initialize`
   (PyConfig: home, non-empty `executable` so CPython does NOT send stdout to logcat,
@@ -49,7 +110,8 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 - `python/PythonThread`: the single thread that inits Python and runs everything.
 - `python/PythonInstaller`: extracts `assets/python/stdlib.zip` to `filesDir/python`,
   stamp = "<version> <sha256>" (written by Gradle task `PackPythonStdlib`); file lock
-  makes it safe across processes. pip target: `filesDir/site-packages` (`_pyrite.bootstrap`).
+  makes it safe across processes. `ensureUserSite()` creates the user site-packages
+  (`filesDir/python-user/lib/python3.15/site-packages`) that pip `--user` installs to.
 - `app/src/main/python/_pyrite/`: helpers inside the interpreter (bootstrap, prepare_main, repl).
 - Build: `app/build.gradle.kts` reads `cross-build/<triplet>/prefix`; libpython +
   `lib*_python.so` -> jniLibs; stdlib (both ABIs merged, minus test/idlelib/tkinter/
@@ -149,9 +211,24 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 - jedi picks a "same environment" when sys.executable's basename starts with "python",
   then tries to spawn it. Always pass `environment=jedi.InterpreterEnvironment()`.
 - Input written to a `RunSession` before the service connects is queued, not dropped.
+- Completion popup missing after typing `os.path.` (PolishTest failed in ~2 of 5 runs):
+  sora's CompletionThread posts `hide()` whenever a request ends with no items, without
+  checking it's still the current request, and `hide()` cancels whatever request *is*
+  current. So any earlier keystroke's request that came back empty (timed out, or
+  "superseded") could cancel the last keystroke's request: no list. Fix: the editor path
+  uses `AnalysisClient.tryComplete`, which returns null for "no answer", and
+  `PythonLanguage` throws sora's `CompletionCancelledException` for it (sora posts nothing
+  then); only a real empty jedi result hides the window. Also, the analysis server
+  answers only the newest queued check/complete/signature request (older ones get
+  `{"superseded": true}`), and the editor waits up to 8 s. Found by logging the
+  completion window's request/show/hide calls with callers (PolishTest, tag
+  PyriteCompletion).
+- pip silently ignores a plain-http index unless its host is passed with
+  `--trusted-host` (the CI stand-in index needs it).
+- With no matching wheel, pip falls back to the sdist and tries to run `sys.executable`
+  to build it, which doesn't exist on Android. `_pyrite/pip.py` turns that into a clear
+  "Android can't build packages from source" error.
 
 ## Open problems
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
   needs the system file picker. Verify by hand on a device.
-- pip `--target` reinstalls dependencies on each install (pip ignores already-installed
-  packages in target mode); cached wheels make it cheap, but it's not "already satisfied".

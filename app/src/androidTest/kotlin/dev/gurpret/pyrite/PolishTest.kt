@@ -1,6 +1,7 @@
 package dev.gurpret.pyrite
 
 import android.os.SystemClock
+import android.util.Log
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
@@ -14,7 +15,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import dev.gurpret.pyrite.settings.ThemeMode
 import dev.gurpret.pyrite.ui.AppViewModel
+import io.github.rosemoe.sora.event.SelectionChangeEvent
 import io.github.rosemoe.sora.lang.diagnostic.DiagnosticRegion
+import io.github.rosemoe.sora.widget.CodeEditor
 import io.github.rosemoe.sora.widget.component.EditorAutoCompletion
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -57,10 +60,18 @@ class PolishTest {
         return result as T
     }
 
-    private fun waitFor(what: String, seconds: Long, condition: () -> Boolean) {
+    /** Recent log lines from this app's processes about Python and analysis (same UID). */
+    private fun appLog(): String = runCatching {
+        Runtime.getRuntime().exec(arrayOf("logcat", "-d", "-v", "time", "-t", "2000")).inputStream
+            .bufferedReader().readLines()
+            .filter { line -> APP_TAGS.any { it in line } }
+            .takeLast(60).joinToString("\n")
+    }.getOrElse { "logcat failed: $it" }
+
+    private fun waitFor(what: String, seconds: Long, diagnose: () -> String = { "" }, condition: () -> Boolean) {
         val deadline = SystemClock.elapsedRealtime() + seconds * 1000
         while (!condition()) {
-            if (SystemClock.elapsedRealtime() > deadline) fail("timed out waiting for $what")
+            if (SystemClock.elapsedRealtime() > deadline) fail("timed out waiting for $what. ${diagnose()}")
             Thread.sleep(100)
         }
     }
@@ -68,14 +79,31 @@ class PolishTest {
     @Test
     fun typingOsPathDotShowsCompletions() {
         val (scenario, vm) = launch()
-        // jedi takes a while to load the first time; wait for the server to answer.
-        val direct = vm.analysis.complete("import os\nos.path.", 2, 8, null, timeoutMs = 90_000).map { it.name }
-        assertTrue("jedi completions: $direct", "join" in direct && "exists" in direct)
+        // jedi takes a while to load the first time; wait for the server to answer. An
+        // empty answer means the server failed or restarted: log why and ask again.
+        val deadline = SystemClock.elapsedRealtime() + 90_000
+        var direct: List<String>
+        while (true) {
+            direct = vm.analysis.complete("import os\nos.path.", 2, 8, null, timeoutMs = 90_000).map { it.name }
+            if (direct.isNotEmpty() || SystemClock.elapsedRealtime() > deadline) break
+            Log.w("PyriteCompletion", "direct completion came back empty; app log:\n${appLog()}")
+            Thread.sleep(1000)
+        }
+        assertTrue("jedi completions: $direct\n${appLog()}", "join" in direct && "exists" in direct)
 
         onMain { vm.loadText("import os\n") }
         compose.onNodeWithTag("editor").performClick()
+        // Records why the completion window opens and closes, for the failure message.
+        val events = java.util.Collections.synchronizedList(mutableListOf<String>())
         onMain {
-            vm.editor.view!!.requestFocus()
+            val view = vm.editor.view!!
+            view.replaceComponent(EditorAutoCompletion::class.java, RecordingCompletion(view, events))
+            view.subscribeAlways(SelectionChangeEvent::class.java) {
+                val line = "${SystemClock.elapsedRealtime() % 100_000} selection cause=${it.cause} col=${it.left.column}"
+                events += line
+                android.util.Log.i("PyriteCompletion", line)
+            }
+            view.requestFocus()
             vm.editor.setCursor(1, 0)
         }
         // Type at human speed: sora skips completion requests that come within 70 ms of
@@ -84,7 +112,16 @@ class PolishTest {
             instrumentation.sendStringSync(c.toString())
             Thread.sleep(200)
         }
-        waitFor("the completion window", 30) {
+        waitFor("the completion window", 30, diagnose = {
+            // What the editor would have asked jedi, and how long jedi takes to answer now.
+            val text = onMain { vm.editor.text }
+            val start = SystemClock.elapsedRealtime()
+            val names = vm.analysis.complete(text, 2, 8, vm.currentFile.path, timeoutMs = 30_000).map { it.name }
+            "text=${text.replace("\n", "\\n")} focus=${onMain { vm.editor.view!!.hasFocus() }} " +
+                "jedi now: ${names.size} items in ${SystemClock.elapsedRealtime() - start} ms. " +
+                "Completion window events:\n" + synchronized(events) { events.takeLast(60).joinToString("\n") } +
+                "\nApp log:\n" + appLog()
+        }) {
             onMain { vm.editor.view!!.getComponent(EditorAutoCompletion::class.java).isShowing }
         }
         assertEquals("import os\nos.path.", onMain { vm.editor.text })
@@ -134,5 +171,36 @@ class PolishTest {
         val prefs = context.getSharedPreferences("pyrite", 0)
         assertEquals("DARK", prefs.getString("theme", null))
         assertTrue(prefs.getString("recent_files", "")!!.contains("examples/fibonacci.py"))
+    }
+}
+
+private val APP_TAGS = listOf(
+    "AnalysisClient", "RunSession", "PythonService", "PythonThread", "PythonInstaller", "Traceback", "pyrite:analysis",
+)
+
+/** sora's completion window, logging each request/show/hide with its caller. */
+private class RecordingCompletion(editor: CodeEditor, private val events: MutableList<String>) :
+    EditorAutoCompletion(editor) {
+    private fun note(what: String) {
+        val caller = Throwable().stackTrace.drop(2).take(4)
+            .joinToString(" < ") { "${it.className.substringAfterLast('.')}.${it.methodName}:${it.lineNumber}" }
+        val line = "${SystemClock.elapsedRealtime() % 100_000} $what showing=$isShowing [$caller]"
+        events += line
+        android.util.Log.i("PyriteCompletion", line)
+    }
+
+    override fun requireCompletion() {
+        note("require")
+        super.requireCompletion()
+    }
+
+    override fun show() {
+        note("show")
+        super.show()
+    }
+
+    override fun hide() {
+        note("hide")
+        super.hide()
     }
 }

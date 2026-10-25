@@ -71,4 +71,24 @@ class ConsoleBufferTest {
         assertTrue(buf.version > v)
         assertEquals(0, buf.size)
     }
+
+    @Test
+    fun imageMarkerBecomesItsOwnLine() {
+        buf.appendOutput(SpanKind.STDOUT, "before\u001b]pyrite-image;/c/fig.png\u0007after\n")
+        val lines = buf.snapshot()
+        assertEquals(listOf("before", "", "after"), lines.map { it.text })
+        assertEquals(listOf(null, "/c/fig.png", null), lines.map { it.image })
+        assertEquals("before\n[image]\nafter\n", buf.plainText())
+        // Ids stay distinct, so the lazy list keys don't collide.
+        assertEquals(3, lines.map { it.id }.toSet().size)
+    }
+
+    @Test
+    fun imageAfterCompleteLine() {
+        buf.appendOutput(SpanKind.STDOUT, "x\n")
+        buf.appendOutput(SpanKind.STDOUT, "\u001b]pyrite-image;/a.png\u0007")
+        assertEquals(listOf("x", ""), texts())
+        assertEquals("/a.png", buf[1].image)
+        assertEquals(2, buf.size)
+    }
 }

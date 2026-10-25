@@ -1,0 +1,96 @@
+name: Android wheels
+
+# Builds CPython 3.15 Android wheels (arm64-v8a, x86_64) for packages that don't
+# publish them on PyPI, and publishes them as a PEP 503 simple index on GitHub Pages
+# (the gh-pages branch). The app adds that index as a pip extra index.
+
+on:
+  push:
+    paths: ['wheels/**', '.github/workflows/wheels.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: wheels-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.package }} (${{ matrix.arch }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [numpy, pillow, kiwisolver, contourpy, matplotlib]
+        arch: [arm64_v8a, x86_64]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install cibuildwheel
+        run: |
+          sudo apt-get install -y -qq nasm >/dev/null   # libjpeg-turbo's x86_64 SIMD
+          python3 -m venv /tmp/cibw
+          /tmp/cibw/bin/pip install -q cibuildwheel==4.3.4
+          echo /tmp/cibw/bin >> "$GITHUB_PATH"
+      - name: Build
+        run: wheels/build.sh ${{ matrix.package }} ${{ matrix.arch }} wheelhouse
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.package }}-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    # Publish whatever built; wheels from earlier runs stay unless replaced.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      pages: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: wheel-*
+          path: new
+          merge-multiple: true
+      - name: Merge with the published wheels
+        run: |
+          mkdir -p all
+          if git fetch -q --depth 1 origin gh-pages; then
+            git archive FETCH_HEAD wheels | tar -x -C all --strip-components=1 || true
+          fi
+          cp new/*.whl all/ 2>/dev/null || true
+          ls -l all
+      - name: Build the site
+        run: |
+          owner=${GITHUB_REPOSITORY%/*}
+          python3 wheels/make_index.py all site "https://${owner,,}.github.io/${GITHUB_REPOSITORY#*/}/simple/"
+      - name: Push gh-pages
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Android wheels built from ${GITHUB_SHA}"
+          # One commit, replaced each time, so old wheel binaries don't pile up in history.
+          git push -q -f "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+      - name: Check the index is served
+        run: |
+          owner=${GITHUB_REPOSITORY%/*}
+          url="https://${owner,,}.github.io/${GITHUB_REPOSITORY#*/}/simple/"
+          for i in $(seq 1 18); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "$url")
+            echo "$url -> $code"
+            [ "$code" = 200 ] && exit 0
+            sleep 10
+          done
+          curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/pages" || true
+          echo "::warning::GitHub Pages isn't serving $url. Enable it once: Settings > Pages > Deploy from a branch > gh-pages, / (root)."

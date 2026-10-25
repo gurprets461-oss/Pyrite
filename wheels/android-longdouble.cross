@@ -1,0 +1,5 @@
+# Extra meson cross file for numpy on Android. numpy normally runs a test program to
+# detect the long double format, which can't run when cross-compiling. On Android,
+# both arm64-v8a and x86_64 use 128-bit IEEE quad precision for long double.
+[properties]
+longdouble_format = 'IEEE_QUAD_LE'

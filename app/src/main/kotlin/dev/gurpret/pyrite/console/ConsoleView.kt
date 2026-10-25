@@ -1,10 +1,13 @@
 package dev.gurpret.pyrite.console
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -18,16 +21,21 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -41,6 +49,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Terminal colors (the console is always dark, like a terminal). */
 object ConsoleColors {
@@ -82,6 +92,36 @@ fun ConsoleLine.toAnnotatedString(): AnnotatedString = buildAnnotatedString {
     }
 }
 
+/** An image line (e.g. a matplotlib figure from plt.show()), decoded off the main thread. */
+@Composable
+private fun ConsoleImage(path: String, style: TextStyle, testTagPrefix: String) {
+    val loaded by produceState<ImageLoad>(ImageLoad.Loading, path) {
+        value = withContext(Dispatchers.IO) {
+            BitmapFactory.decodeFile(path)?.let { ImageLoad.Done(it.asImageBitmap()) } ?: ImageLoad.Failed
+        }
+    }
+    when (val l = loaded) {
+        is ImageLoad.Done -> Image(
+            bitmap = l.bitmap,
+            contentDescription = "image output",
+            contentScale = ContentScale.Fit,
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(l.bitmap.width.toFloat() / l.bitmap.height.coerceAtLeast(1))
+                .padding(vertical = 4.dp)
+                .testTag("$testTagPrefix-image"),
+        )
+        ImageLoad.Failed -> Text("[image not available: $path]", style = style.copy(color = ConsoleColors.info))
+        ImageLoad.Loading -> Text("[image]", style = style.copy(color = ConsoleColors.info))
+    }
+}
+
+private sealed interface ImageLoad {
+    data object Loading : ImageLoad
+    data object Failed : ImageLoad
+    class Done(val bitmap: ImageBitmap) : ImageLoad
+}
+
 /**
  * Scrollback + input line. [onSubmit] gets each entered line (already echoed and
  * added to the history by the caller via [ConsoleState.takeInput]).
@@ -119,8 +159,13 @@ fun ConsoleView(
                     // Read the version here too: the last line changes in place as output arrives.
                     state.version
                     val line = state.buffer[index]
-                    val text = remember(line) { line.toAnnotatedString() }
-                    Text(text, style = monospace, modifier = Modifier.fillMaxWidth())
+                    val image = line.image
+                    if (image != null) {
+                        ConsoleImage(image, monospace, testTagPrefix)
+                    } else {
+                        val text = remember(line) { line.toAnnotatedString() }
+                        Text(text, style = monospace, modifier = Modifier.fillMaxWidth())
+                    }
                 }
             }
         }

@@ -12,3 +12,5 @@ build/
 /cross-build/
 /.cache/
 /tools/jvm-unit-tests/.gradle/
+__pycache__/
+*.pyc

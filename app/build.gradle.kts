@@ -27,6 +27,22 @@ if (!pythonVersionFile.exists()) {
 val pyVersion = pythonVersionFile.readText().trim()             // e.g. 3.15.1
 val pyMinor = pyVersion.split(".").take(2).joinToString(".") // e.g. 3.15
 val pythonPrefixes = pythonAbis.mapValues { (_, triplet) -> File(crossBuildDir, "$triplet/prefix") }
+
+// Android wheels for packages that don't publish them on PyPI (numpy, Pillow, matplotlib...),
+// built by .github/workflows/wheels.yml and served from the gh-pages branch.
+val wheelIndexUrl = (findProperty("pyrite.wheelIndex") as String?)
+    ?: "https://gurprets461-oss.github.io/Pyrite/simple/"
+
+// pip's "site" config file (sys.prefix/pip.conf), shipped in the stdlib zip.
+val pipConfig = """
+    |# Pyrite's pip settings. This file is replaced when the app updates; per-command
+    |# options (--index-url, --extra-index-url, --no-binary...) still override it.
+    |[global]
+    |# Android wheels for packages that don't publish them on PyPI yet.
+    |extra-index-url = $wheelIndexUrl
+    |# Android can't build sdists (no compiler), so take an older wheel over a newer sdist.
+    |prefer-binary = true
+    |""".trimMargin()
 for ((abi, prefix) in pythonPrefixes) {
     if (!File(prefix, "lib/libpython$pyMinor.so").exists()) {
         throw GradleException("Python $pyVersion for $abi missing at $prefix: run scripts/fetch-python.sh")
@@ -59,6 +75,7 @@ android {
             }
         }
         buildConfigField("String", "PYTHON_VERSION", "\"$pyVersion\"")
+        buildConfigField("String", "WHEEL_INDEX_URL", "\"$wheelIndexUrl\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Files must survive between tests: the orchestrator runs each test in a new process.
@@ -100,6 +117,7 @@ androidComponents.onVariants { variant ->
     variant.sources.assets!!.addGeneratedSourceDirectory(
         tasks.register<PackPythonStdlib>("pack${variant.name.cap()}PythonStdlib") {
             pythonVersion.set(pyVersion)
+            pipConf.set(pipConfig)
             stdlibDirs.from(pythonPrefixes.values.map { File(it, "lib/python$pyMinor") })
             appPythonDir.set(file("src/main/python"))
             wheels.from(fileTree(File(crossBuildDir, "wheels")) { include("*.whl") })
@@ -131,6 +149,8 @@ abstract class SyncDir : Sync() {
 /** Writes python/stdlib.zip and python/stdlib.stamp ("<version> <sha256 of zip>"). */
 abstract class PackPythonStdlib : DefaultTask() {
     @get:Input abstract val pythonVersion: Property<String>
+    /** Written to the zip root, i.e. sys.prefix/pip.conf (pip's site config). */
+    @get:Input abstract val pipConf: Property<String>
     @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val stdlibDirs: ConfigurableFileCollection
     @get:InputDirectory @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -173,6 +193,8 @@ abstract class PackPythonStdlib : DefaultTask() {
                 }
             }
         }
+        val pipConfBytes = pipConf.get().toByteArray()
+        entries["pip.conf"] = { pipConfBytes.inputStream() }
         val appDir = appPythonDir.get().asFile
         appDir.walkTopDown().filter { it.isFile && "__pycache__" !in it.path }.forEach { f ->
             entries["$sitePackages/${f.relativeTo(appDir).invariantSeparatorsPath}"] = { f.inputStream() }
