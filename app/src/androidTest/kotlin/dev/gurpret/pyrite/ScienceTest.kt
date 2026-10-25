@@ -3,6 +3,7 @@ package dev.gurpret.pyrite
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.net.Uri
 import android.util.Log
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasTestTag
@@ -67,7 +68,8 @@ class ScienceTest {
         // Pages isn't serving yet; otherwise pip uses the app's pip.conf alone.
         val standIn = InstrumentationRegistry.getArguments().getString("wheelIndex")
         if (standIn != null) Log.w(TAG, "wheel index: CI stand-in $standIn instead of ${BuildConfig.WHEEL_INDEX_URL}")
-        val extra = standIn?.let { listOf("--extra-index-url", it) }.orEmpty()
+        // pip ignores plain-http indexes unless the host is trusted.
+        val extra = standIn?.let { listOf("--extra-index-url", it, "--trusted-host", Uri.parse(it).host!!) }.orEmpty()
         val r = run(RunRequest.Pip(listOf("install") + extra + listOf("numpy", "matplotlib")), 1200)
         val out = r.stdout + r.stderr
         out.lines().filter { "Downloading" in it || "Successfully" in it || "ERROR" in it }

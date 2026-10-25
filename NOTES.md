@@ -207,6 +207,11 @@ The C bridge can be syntax-checked with host clang against Python 3.15 headers (
 - jedi picks a "same environment" when sys.executable's basename starts with "python",
   then tries to spawn it. Always pass `environment=jedi.InterpreterEnvironment()`.
 - Input written to a `RunSession` before the service connects is queued, not dropped.
+- pip silently ignores a plain-http index unless its host is passed with
+  `--trusted-host` (the CI stand-in index needs it).
+- With no matching wheel, pip falls back to the sdist and tries to run `sys.executable`
+  to build it, which doesn't exist on Android. `_pyrite/pip.py` turns that into a clear
+  "Android can't build packages from source" error.
 
 ## Open problems
 - SAF import/export (Files tab) is implemented but not covered by automated tests: it
