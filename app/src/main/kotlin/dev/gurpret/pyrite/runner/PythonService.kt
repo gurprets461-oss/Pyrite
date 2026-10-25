@@ -35,6 +35,8 @@ open class PythonService : Service() {
     private val binder = object : IPythonService.Stub() {
         override fun getPid(): Int = Process.myPid()
 
+        override fun isFresh(): Boolean = !processUsed.get()
+
         override fun start(
             request: android.os.Bundle,
             stdin: ParcelFileDescriptor,
@@ -42,7 +44,8 @@ open class PythonService : Service() {
             stderr: ParcelFileDescriptor,
             callback: IPythonCallback,
         ) {
-            check(used.compareAndSet(false, true)) { "this process has already run a request" }
+            check(used.compareAndSet(false, true)) { "this service has already run a request" }
+            check(processUsed.compareAndSet(false, true)) { "this process has already run Python" }
             val req = RunRequest.fromBundle(request)
             PythonThread.submit { run(req, stdin, stdout, stderr, callback) }
         }
@@ -89,5 +92,8 @@ open class PythonService : Service() {
 
     companion object {
         private const val TAG = "PythonService"
+
+        /** Per process, not per service instance: a cached process can host a new instance. */
+        private val processUsed = AtomicBoolean(false)
     }
 }

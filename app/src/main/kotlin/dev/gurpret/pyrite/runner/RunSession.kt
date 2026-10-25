@@ -65,6 +65,8 @@ class RunSession(
     private var stdinClosed = false
     private var exitStatus: Int? = null
     private var stopRequested = false
+    private var restartingStale = false
+    private var staleRestarts = 0
     private var started = false
     private var dead = false
     private var openStreams = 2
@@ -156,10 +158,18 @@ class RunSession(
             binder = b
             val svc = IPythonService.Stub.asInterface(b)
             service = svc
-            try {
+            val fresh = try {
                 pid = svc.pid
+                svc.isFresh
             } catch (_: RemoteException) {
                 return  // death recipient fires
+            }
+            if (!fresh && staleRestarts < MAX_STALE_RESTARTS) {
+                // A reused process that already ran Python: replace it with a new one.
+                staleRestarts++
+                restartingStale = true
+                Process.killProcess(pid)
+                return
             }
             if (stopRequested) {
                 Process.killProcess(pid)
@@ -213,6 +223,16 @@ class RunSession(
 
     private fun onProcessDied() {
         if (dead) return
+        if (restartingStale) {
+            restartingStale = false
+            runCatching { binder?.unlinkToDeath(deathRecipient, 0) }
+            service = null
+            binder = null
+            pid = 0
+            if (bound) runCatching { app.unbindService(connection) }
+            bound = app.bindService(Intent(app, serviceClass), connection, Context.BIND_AUTO_CREATE)
+            if (bound) return
+        }
         dead = true
         stdin?.let { s -> inputWriter.execute { runCatching { s.close() } } }
         stdin = null
@@ -303,6 +323,7 @@ class RunSession(
     companion object {
         private const val TAG = "RunSession"
         const val INTERRUPT_GRACE_MS = 2000L
+        private const val MAX_STALE_RESTARTS = 3
 
         fun signalName(sig: Int): String = when (sig) {
             4 -> "SIGILL"

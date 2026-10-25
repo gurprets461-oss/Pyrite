@@ -7,6 +7,7 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.lifecycle.ViewModelProvider
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -107,7 +108,8 @@ class PolishTest {
     fun settingsExamplesAndRecentFiles() {
         val (scenario, vm) = launch()
         // Dark theme from the settings dialog.
-        compose.onNodeWithTag("settings").performClick()
+        // The toolbar scrolls horizontally on narrow screens.
+        compose.onNodeWithTag("settings").performScrollTo().performClick()
         compose.onNodeWithTag("theme-dark").performClick()
         assertEquals(ThemeMode.DARK, onMain { vm.settings.theme })
         compose.onNodeWithTag("settings-done").performClick()
