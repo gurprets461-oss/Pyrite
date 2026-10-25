@@ -16,6 +16,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Each run gets its own process: Stop = kill it, and a crash can't take down the UI. -->
+        <service
+            android:name=".runner.PythonService"
+            android:exported="false"
+            android:process=":py" />
     </application>
 
 </manifest>

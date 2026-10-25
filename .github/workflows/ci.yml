@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    paths-ignore: ['**.md']
   pull_request:
   workflow_dispatch:
 
@@ -97,11 +98,13 @@ jobs:
           ram-size: 4096M
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-          script: ./gradlew connectedDebugAndroidTest --stacktrace
+          script: scripts/ci-instrumented.sh
 
       - name: Upload instrumented test reports
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: instrumented-test-reports
-          path: app/build/reports/androidTests
+          path: |
+            app/build/reports/androidTests
+            app/build/outputs/androidTest-results

@@ -1,0 +1,4 @@
+# Paths under app/src/main/kotlin
+dev/gurpret/pyrite/BuildAbis.kt
+dev/gurpret/pyrite/python/PyLiteral.kt
+dev/gurpret/pyrite/python/MarkerScanner.kt

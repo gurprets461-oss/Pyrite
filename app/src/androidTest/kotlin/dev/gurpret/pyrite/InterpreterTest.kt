@@ -8,13 +8,18 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.Timeout
 import org.junit.runner.RunWith
 import java.io.File
 
 /** M1: the embedded interpreter, running inside the test (= app) process. */
 @RunWith(AndroidJUnit4::class)
 class InterpreterTest {
+    @get:Rule
+    val timeout: Timeout = Timeout.seconds(120)
+
     companion object {
         private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 

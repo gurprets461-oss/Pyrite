@@ -11,3 +11,4 @@ build/
 # Fetched by scripts/fetch-python.sh
 /cross-build/
 /.cache/
+/tools/jvm-unit-tests/.gradle/

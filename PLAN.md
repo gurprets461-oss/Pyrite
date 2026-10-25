@@ -3,16 +3,16 @@
 Work top to bottom. Check items off only when the "Done when" checks pass by running them.
 
 ## M0 — Skeleton
-- [ ] Compose app, single activity, builds for arm64-v8a + x86_64
-- [ ] `scripts/setup-sdk.sh`: installs SDK, NDK, build tools non-interactively
-- [ ] `scripts/fetch-python.sh`: downloads the official Android embeddable packages, verifies checksums, unpacks into the layout the CPython docs/testbed use
-- [ ] GitHub Actions: build + unit tests on push
+- [x] Compose app, single activity, builds for arm64-v8a + x86_64
+- [x] `scripts/setup-sdk.sh`: installs SDK, NDK, build tools non-interactively
+- [x] `scripts/fetch-python.sh`: downloads the official Android embeddable packages, verifies checksums, unpacks into the layout the CPython docs/testbed use
+- [x] GitHub Actions: build + unit tests on push
 **Done when:** fresh clone → `scripts/setup-sdk.sh && scripts/fetch-python.sh && ./gradlew assembleDebug` succeeds.
 
 ## M1 — Hello, interpreter
-- [ ] C JNI bridge (CMake) loads libpython, configures home/paths, runs a string
-- [ ] Stdlib extracted from assets on first launch, with version stamp
-- [ ] Debug screen: text box + Run button + output
+- [x] C JNI bridge (CMake) loads libpython, configures home/paths, runs a string
+- [x] Stdlib extracted from assets on first launch, with version stamp
+- [x] Debug screen: text box + Run button + output
 **Done when:** instrumented test runs `import sys, json, sqlite3, ssl; print(sum(range(10)))` and asserts output `45` with no exception.
 
 ## M2 — Runner process

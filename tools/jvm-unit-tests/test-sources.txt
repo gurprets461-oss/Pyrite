@@ -1,0 +1,4 @@
+# Paths under app/src/test/kotlin
+dev/gurpret/pyrite/BuildAbisTest.kt
+dev/gurpret/pyrite/python/PyLiteralTest.kt
+dev/gurpret/pyrite/python/MarkerScannerTest.kt

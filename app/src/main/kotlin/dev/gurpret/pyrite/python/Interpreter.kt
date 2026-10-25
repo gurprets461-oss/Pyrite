@@ -50,5 +50,16 @@ object Interpreter {
         if (prep != 0) prep else NativeBridge.runFile(path.toByteArray(Charsets.UTF_8))
     }
 
+    /** An interactive console on stdin/stdout, until EOF or exit(). */
+    fun runRepl(): Int = runString("import _pyrite.repl; _pyrite.repl.main()", "<pyrite-repl>")
+
+    /**
+     * Shuts the interpreter down the way `python` does on exit. The process can't
+     * run Python again afterwards. Returns the final exit status.
+     */
+    fun shutdown(status: Int): Int = PythonThread.call {
+        if (NativeBridge.finalizePython() < 0 && status == 0) 120 else status
+    }
+
     fun interrupt() = NativeBridge.interrupt()
 }

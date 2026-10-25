@@ -10,6 +10,7 @@
 
 #include <android/log.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <jni.h>
 #include <pthread.h>
 #include <signal.h>
@@ -71,6 +72,41 @@ Java_dev_gurpret_pyrite_python_NativeBridge_redirectStdio(
     // C-level stdio must not hold output back either.
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
+}
+
+// --- fatal signals ------------------------------------------------------------
+
+// In the runner process a native crash should end that process quietly, so the UI
+// can report it, rather than going through debuggerd and the system crash dialog.
+// Installed before Py_Initialize, so Python's faulthandler chains to it: the
+// faulthandler prints the Python traceback, then re-raises into this handler.
+static const int FATAL_SIGNALS[] = {SIGABRT, SIGBUS, SIGFPE, SIGILL, SIGSEGV, SIGSYS, SIGTRAP};
+
+static void write_str(const char *s) {
+    ssize_t unused = write(STDERR_FILENO, s, strlen(s));
+    (void)unused;
+}
+
+static void fatal_signal_handler(int sig) {
+    // Only async-signal-safe calls here.
+    const char *name = sig == SIGABRT ? "SIGABRT" : sig == SIGSEGV ? "SIGSEGV"
+        : sig == SIGBUS ? "SIGBUS" : sig == SIGFPE ? "SIGFPE" : sig == SIGILL ? "SIGILL"
+        : sig == SIGSYS ? "SIGSYS" : sig == SIGTRAP ? "SIGTRAP" : "signal";
+    write_str("\nFatal signal: ");
+    write_str(name);
+    write_str("\n");
+    _exit(128 + sig);
+}
+
+JNIEXPORT void JNICALL
+Java_dev_gurpret_pyrite_python_NativeBridge_installCrashHandlers(JNIEnv *env, jclass cls) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof sa);
+    sa.sa_handler = fatal_signal_handler;
+    sigemptyset(&sa.sa_mask);
+    for (size_t i = 0; i < sizeof FATAL_SIGNALS / sizeof FATAL_SIGNALS[0]; i++) {
+        sigaction(FATAL_SIGNALS[i], &sa, NULL);
+    }
 }
 
 // --- initialization -----------------------------------------------------------
@@ -289,6 +325,32 @@ Java_dev_gurpret_pyrite_python_NativeBridge_runFile(JNIEnv *env, jclass cls, jby
     flush_std_streams();
     free(path);
     return status;
+}
+
+// Finalizes the interpreter like a normal interpreter exit: waits for non-daemon
+// threads, runs atexit handlers, flushes. Returns Py_FinalizeEx()'s result.
+JNIEXPORT jint JNICALL
+Java_dev_gurpret_pyrite_python_NativeBridge_finalizePython(JNIEnv *env, jclass cls) {
+    if (!Py_IsInitialized()) {
+        return 0;
+    }
+    python_thread_valid = 0;
+    return Py_FinalizeEx();
+}
+
+// Points fds 0/1/2 at /dev/null, closing this process's ends of the stdio pipes.
+JNIEXPORT void JNICALL
+Java_dev_gurpret_pyrite_python_NativeBridge_detachStdio(JNIEnv *env, jclass cls) {
+    int fd = open("/dev/null", O_RDWR | O_CLOEXEC);
+    if (fd < 0) {
+        return;
+    }
+    for (int target = 0; target < 3; target++) {
+        dup2(fd, target);
+    }
+    if (fd > 2) {
+        close(fd);
+    }
 }
 
 // --- control ----------------------------------------------------------------------
