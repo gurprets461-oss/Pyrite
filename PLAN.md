@@ -48,10 +48,10 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** `pip install requests rich` succeeds and `requests.get("https://example.com").status_code == 200`.
 
 ## M7 — Pydroid-feel polish
-- [ ] Autocomplete + signature help via jedi
-- [ ] Syntax-error underlines (compile on typing pause)
-- [ ] Bundled example scripts; dark/light theme; settings screen
-- [ ] Recent files; restore last session
+- [x] Autocomplete + signature help via jedi
+- [x] Syntax-error underlines (compile on typing pause)
+- [x] Bundled example scripts; dark/light theme; settings screen
+- [x] Recent files; restore last session
 **Done when:** typing `os.path.` shows a completion list; a syntax error is underlined without running.
 
 ## Later (not v1)

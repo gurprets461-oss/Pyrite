@@ -14,7 +14,11 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
   (sibling import, cwd == sys.path[0]), sees out.txt in the browser, renames + deletes it.
 - M6 done: `PackagesTest` installs `requests rich` from the Packages tab, then
   `requests.get("https://example.com")` -> 200; `pip list` from the REPL; Android wheels.
-- Current: **M7** (jedi completions, syntax underline, settings/examples/recent/session).
+- M7 done: `PolishTest` types `os.path.` key by key and sees sora's completion window
+  (jedi via `InterpreterEnvironment` in `:analysis`); `def broken(:` gets an error
+  underline + SyntaxError bar with nothing run, cleared once fixed; dark theme from
+  settings, example opened, back to main.py via Recent, all persisted.
+- All milestones (M0–M7) done. CI run 40209763735: 30 instrumented tests, 0 failed.
 
 ## pip / Android wheels (M6)
 - pip = CPython's bundled ensurepip wheel (pip 26.2.2), unpacked into
