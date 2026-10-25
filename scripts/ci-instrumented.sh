@@ -18,5 +18,5 @@ if [ $status -ne 0 ]; then
     grep -E '^e: |error:|What went wrong|FAILED' -A4 instrumented.log | head -100 || true
 fi
 echo "Instrumented test results:"
-python3 "$(dirname "$0")/junit-summary.py" app/build/outputs/androidTest-results/connected || true
+python3 "$(dirname "$0")/junit-summary.py" app/build/outputs/androidTest-results/connected 2>&1 | tee test-summary.txt || true
 exit $status

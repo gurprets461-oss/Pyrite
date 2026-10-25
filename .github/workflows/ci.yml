@@ -24,6 +24,8 @@ jobs:
           java-version: 21
 
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          add-job-summary: never
 
       - name: Cache Python downloads
         uses: actions/cache@v6
@@ -77,6 +79,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: true
+          add-job-summary: never
 
       - name: Cache Python downloads
         uses: actions/cache@v6
@@ -106,6 +109,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: scripts/ci-instrumented.sh
+
+      - name: Test summary
+        if: always()
+        run: cat test-summary.txt 2>/dev/null || echo "no test summary"
 
       - name: Upload instrumented test reports
         if: always()

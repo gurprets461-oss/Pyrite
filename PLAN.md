@@ -24,8 +24,8 @@ Work top to bottom. Check items off only when the "Done when" checks pass by run
 **Done when:** instrumented tests pass for: print; `input()` echo; `while True: pass` stopped within 3 s; `1/0` shows a traceback; `import os; os.abort()` → UI survives and reports the crash.
 
 ## M3 — Console + REPL
-- [ ] Console view: scrollback (cap ~10k lines), monospace, input line, copy text, basic ANSI colors
-- [ ] REPL tab via `code.InteractiveConsole`: multi-line blocks, `>>>` / `...` prompts, up/down history
+- [x] Console view: scrollback (cap ~10k lines), monospace, input line, copy text, basic ANSI colors
+- [x] REPL tab via `code.InteractiveConsole`: multi-line blocks, `>>>` / `...` prompts, up/down history
 **Done when:** tests pass: REPL defines a multi-line function and calls it; `print("\033[31mred\033[0m")` renders red.
 
 ## M4 — Editor

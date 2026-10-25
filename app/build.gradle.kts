@@ -59,6 +59,13 @@ android {
         buildConfigField("String", "PYTHON_VERSION", "\"$pyVersion\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // Files must survive between tests: the orchestrator runs each test in a new process.
+        testInstrumentationRunnerArguments["clearPackageData"] = "false"
+    }
+
+    testOptions {
+        // Each test in its own process, so tests can check behavior across process death.
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
     }
 
     externalNativeBuild {
@@ -180,6 +187,9 @@ dependencies {
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
+    implementation(platform(libs.sora.bom))
+    implementation(libs.sora.editor)
+    implementation(libs.sora.language.textmate)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 
@@ -191,4 +201,6 @@ dependencies {
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+    androidTestUtil(libs.androidx.test.orchestrator)
+    androidTestUtil(libs.androidx.test.services)
 }

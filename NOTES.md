@@ -5,7 +5,10 @@ Resume from here. PLAN.md has the milestones; AGENTS.md has the rules and decisi
 ## Status
 - M0 done: CI green; `fresh-setup.yml` proved the acceptance command from an empty SDK dir.
 - M1 done: `InterpreterTest` (in-process) passes on the API 35 emulator, incl. the `45` check.
-- Current: **M2 — Runner process** (`PythonService` in `:py`, `RunSession` client, `RunnerTest`).
+- M2 done: `RunnerTest` (18 tests incl. stop < 3 s, Ctrl+C, os.abort()) green.
+- M3 done: `ConsoleUiTest` (REPL multi-line function + history, ANSI red) green.
+- Current: **M4 — Editor** (sora-editor + TextMate, keys row, autosave, find/replace,
+  font size; `EditorTest` uses the test orchestrator to check persistence across process death).
 
 ## Architecture (so far)
 - `app/src/main/cpp/pyrite.c`: JNI bridge. `redirectStdio` (dup2 onto 0/1/2), `initialize`
